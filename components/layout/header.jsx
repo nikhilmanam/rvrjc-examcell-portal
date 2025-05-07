@@ -1,21 +1,12 @@
-import Image from "next/image"
 import Navbar from "./navbar"
 
 export default function Header() {
   return (
-    <header className="w-full">
-      <div className="border-y-4 border-[#ff0000]">
-        <div className="max-w-full mx-auto">
-          <div className="flex justify-center items-center py-2 px-4">
-            <Image
-              src="/images/rvrjcamslogo.jpg"
-              alt="RVRJCAMS Logo"
-              width={1100}
-              height={200}
-              className="w-full h-auto"
-              priority
-            />
-          </div>
+    <header className="w-full bg-white shadow-md">
+      <div className="max-w-7xl mx-auto px-4">
+        <div className="flex flex-col items-center py-4">
+          <h1 className="text-3xl font-bold text-[#1a237e] mb-2">R.V.R & J.C College of Engineering</h1>
+          <h2 className="text-xl text-gray-600">Examination Invigilation Management System</h2>
         </div>
       </div>
       <Navbar />

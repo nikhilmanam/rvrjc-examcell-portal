@@ -8,10 +8,12 @@ import { useExamStore } from "@/lib/data"
 import InvigilatorRequirementsTable from "@/components/exam-section/invigilator-requirements-table"
 import RoomManagement from "@/components/exam-section/room-management"
 import { ArrowLeft } from "lucide-react"
+import { use } from "react"
 
 export default function ManageExamPage({ params }) {
   const router = useRouter()
-  const examId = params.id
+  const resolvedParams = use(params)
+  const examId = resolvedParams.id
   const { examinations } = useExamStore()
 
   const [exam, setExam] = useState(null)
@@ -33,7 +35,7 @@ export default function ManageExamPage({ params }) {
 
         const currentDate = new Date(start)
         while (currentDate <= end) {
-          dates.push(new Date(currentDate))
+          dates.push(new Date(currentDate.getTime())) // Create a new Date object for each date
           currentDate.setDate(currentDate.getDate() + 1)
         }
 

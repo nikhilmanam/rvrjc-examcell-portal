@@ -2,19 +2,20 @@
 import { useRouter } from "next/navigation"
 import DashboardHeader from "@/components/dashboard/dashboard-header"
 import { UserCheck, Calendar, BarChart2 } from "lucide-react"
-import { useAuthStore } from "@/lib/data"
+import { useAuthStore, useExamStore } from "@/lib/data"
 import AuthGuard from "@/components/auth/auth-guard"
 
 export default function CoordinatorDashboard() {
   const router = useRouter()
   const { user } = useAuthStore()
+  const { examinations } = useExamStore()
 
-  const handleManageStaff = () => {
-    router.push("/coordinator/manage-staff")
+  const handleManageStaff = (examId) => {
+    router.push(`/coordinator/manage-staff/${examId}`)
   }
 
-  const handleViewRequirements = () => {
-    router.push("/coordinator/view-requirements")
+  const handleViewRequirements = (examId) => {
+    router.push(`/coordinator/exam/${examId}`)
   }
 
   const handleViewStatistics = () => {
@@ -30,54 +31,52 @@ export default function CoordinatorDashboard() {
           department={user?.department}
         />
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <div className="flex flex-col items-center text-center">
-              <div className="text-blue-600 mb-4">
-                <UserCheck className="w-12 h-12" />
-              </div>
-              <h3 className="text-xl font-bold mb-2">Manage Staff Availability</h3>
-              <p className="text-gray-600 mb-6">Add and manage faculty members available for invigilation</p>
-              <button
-                onClick={handleManageStaff}
-                className="px-4 py-2 rounded bg-green-500 hover:bg-green-600 text-white"
-              >
-                Manage Employees
-              </button>
-            </div>
-          </div>
+        <div className="mb-6">
+          <h2 className="text-xl font-bold">Examination Series</h2>
+        </div>
 
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <div className="flex flex-col items-center text-center">
-              <div className="text-blue-600 mb-4">
-                <Calendar className="w-12 h-12" />
+        {examinations.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+            {examinations.map((exam) => (
+              <div key={exam.id} className="bg-white rounded-lg shadow-md p-6 flex flex-col items-center text-center">
+                <h3 className="text-xl font-bold mb-2">{exam.title}</h3>
+                <p className="text-gray-600 mb-4">{new Date(exam.startDate).toLocaleDateString()} - {new Date(exam.endDate).toLocaleDateString()}</p>
+                <div className="flex flex-col gap-2 w-full">
+                  <button
+                    onClick={() => handleManageStaff(exam.id)}
+                    className="px-4 py-2 rounded bg-green-500 hover:bg-green-600 text-white w-full"
+                  >
+                    Manage Employees
+                  </button>
+                  <button
+                    onClick={() => handleViewRequirements(exam.id)}
+                    className="px-4 py-2 rounded bg-blue-500 hover:bg-blue-600 text-white w-full"
+                  >
+                    Exam Requirements
+                  </button>
+                </div>
               </div>
-              <h3 className="text-xl font-bold mb-2">Exam Section Data</h3>
-              <p className="text-gray-600 mb-6">View and download the invigilator requirements for your department</p>
-              <button
-                onClick={handleViewRequirements}
-                className="px-4 py-2 rounded bg-blue-500 hover:bg-blue-600 text-white"
-              >
-                View Requirements
-              </button>
-            </div>
+            ))}
           </div>
+        ) : (
+          <div className="bg-white rounded-lg shadow-md p-8 text-center mb-8">
+            <p className="text-gray-500">No examination series created yet by the Exam Section.</p>
+          </div>
+        )}
 
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <div className="flex flex-col items-center text-center">
-              <div className="text-blue-600 mb-4">
-                <BarChart2 className="w-12 h-12" />
-              </div>
-              <h3 className="text-xl font-bold mb-2">Employee Assignment Stats</h3>
-              <p className="text-gray-600 mb-6">View monthly invigilation assignment counts for department employees</p>
-              <button
-                onClick={handleViewStatistics}
-                className="px-4 py-2 rounded bg-blue-500 hover:bg-blue-600 text-white"
-              >
-                View Statistics
-              </button>
-            </div>
+        {/* Employee Stats Section */}
+        <div className="bg-white rounded-lg shadow-md p-6 flex flex-col items-center text-center mt-8">
+          <div className="text-blue-600 mb-4">
+            <BarChart2 className="w-12 h-12" />
           </div>
+          <h3 className="text-xl font-bold mb-2">Employee Assignment Stats</h3>
+          <p className="text-gray-600 mb-6">View monthly invigilation assignment counts for department employees</p>
+          <button
+            onClick={handleViewStatistics}
+            className="px-4 py-2 rounded bg-blue-500 hover:bg-blue-600 text-white"
+          >
+            View Statistics
+          </button>
         </div>
       </div>
     </AuthGuard>

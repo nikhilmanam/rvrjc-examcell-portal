@@ -1,6 +1,10 @@
+"use client"
+
 import Link from "next/link"
+import { usePathname } from "next/navigation"
 
 export default function Navbar() {
+  const pathname = usePathname()
   const navItems = [
     { name: "Home", path: "/" },
     { name: "Admin", path: "/admin/login" },
@@ -11,20 +15,22 @@ export default function Navbar() {
   ]
 
   return (
-    <nav className="bg-[#0000ff] py-2">
+    <nav className="bg-[#1a237e]">
       <div className="max-w-7xl mx-auto px-4">
-        <div className="flex justify-center items-center">
-          <div className="bg-[#ffa500] rounded-lg w-full">
-            <div className="flex justify-center items-center">
-              {navItems.map((item, index) => (
-                <div key={item.name} className="flex items-center">
-                  <Link href={item.path} className="text-black font-bold text-xl px-6 py-2 hover:underline">
-                    {item.name}
-                  </Link>
-                  {index < navItems.length - 1 && <span className="text-black font-bold">|</span>}
-                </div>
-              ))}
-            </div>
+        <div className="flex justify-center">
+          <div className="flex space-x-1">
+            {navItems.map((item) => (
+              <Link
+                key={item.name}
+                href={item.path}
+                className={`px-6 py-3 text-white font-medium transition-colors duration-200
+                  ${pathname === item.path 
+                    ? 'bg-white/20' 
+                    : 'hover:bg-white/10'}`}
+              >
+                {item.name}
+              </Link>
+            ))}
           </div>
         </div>
       </div>

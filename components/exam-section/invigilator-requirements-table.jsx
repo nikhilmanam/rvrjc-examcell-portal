@@ -12,7 +12,7 @@ export default function InvigilatorRequirementsTable({ examId, dateRange }) {
   // Initialize requirements state with zeros
   const [localRequirements, setLocalRequirements] = useState(
     dateRange.map((date) => ({
-      date,
+      date: new Date(date), // Ensure date is a proper Date object
       departments: departments.map((dept) => ({
         name: dept,
         morning: 0,
@@ -24,7 +24,10 @@ export default function InvigilatorRequirementsTable({ examId, dateRange }) {
   // Load existing requirements if available
   useEffect(() => {
     if (requirements[examId]) {
-      setLocalRequirements(requirements[examId])
+      setLocalRequirements(requirements[examId].map(req => ({
+        ...req,
+        date: new Date(req.date) // Ensure date is a proper Date object
+      })))
     }
   }, [examId, requirements])
 
@@ -52,6 +55,9 @@ export default function InvigilatorRequirementsTable({ examId, dateRange }) {
   }
 
   const formatDate = (date) => {
+    if (!(date instanceof Date) || isNaN(date)) {
+      return "Invalid Date"
+    }
     return date.toLocaleDateString("en-US", {
       month: "numeric",
       day: "numeric",

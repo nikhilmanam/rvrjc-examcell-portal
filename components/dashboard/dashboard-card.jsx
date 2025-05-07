@@ -6,18 +6,20 @@ export default function DashboardCard({ title, description, icon, buttonText, bu
   const CardIcon = icon
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6">
+    <div className="bg-white rounded-xl shadow-lg p-8 border border-gray-100 hover:shadow-xl transition-shadow duration-300">
       <div className="flex flex-col items-center text-center">
-        <div className="text-blue-600 mb-4">{CardIcon && <CardIcon className="w-12 h-12" />}</div>
-        <h3 className="text-xl font-bold mb-2">{title}</h3>
-        <p className="text-gray-600 mb-6">{description}</p>
+        <div className="w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center mb-6">
+          {CardIcon && <CardIcon className="w-8 h-8 text-blue-600" />}
+        </div>
+        <h3 className="text-xl font-bold text-gray-800 mb-3">{title}</h3>
+        <p className="text-gray-600 mb-6 leading-relaxed">{description}</p>
         {buttonText && buttonLink && (
           <Link
             href={buttonLink}
-            className={`px-4 py-2 rounded ${
+            className={`px-6 py-3 rounded-lg font-medium transition-colors duration-200 ${
               buttonText.toLowerCase().includes("manage")
-                ? "bg-green-500 hover:bg-green-600 text-white"
-                : "bg-blue-500 hover:bg-blue-600 text-white"
+                ? "bg-green-600 hover:bg-green-700 text-white"
+                : "bg-blue-600 hover:bg-blue-700 text-white"
             }`}
           >
             {buttonText}
@@ -26,10 +28,10 @@ export default function DashboardCard({ title, description, icon, buttonText, bu
         {buttonText && onClick && (
           <button
             onClick={onClick}
-            className={`px-4 py-2 rounded ${
+            className={`px-6 py-3 rounded-lg font-medium transition-colors duration-200 ${
               buttonText.toLowerCase().includes("manage")
-                ? "bg-green-500 hover:bg-green-600 text-white"
-                : "bg-blue-500 hover:bg-blue-600 text-white"
+                ? "bg-green-600 hover:bg-green-700 text-white"
+                : "bg-blue-600 hover:bg-blue-700 text-white"
             }`}
           >
             {buttonText}

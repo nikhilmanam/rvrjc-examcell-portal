@@ -16,7 +16,6 @@ export default function RoomAllocation({ examId }) {
   const [submittedDates, setSubmittedDates] = useState({})
   const [errorMessage, setErrorMessage] = useState("")
 
-  // For testing purposes - set all dates as submitted
   useEffect(() => {
     // Get all unique dates with assignments
     const dates = getAssignmentDates(examId)
@@ -28,10 +27,9 @@ export default function RoomAllocation({ examId }) {
     }
 
     // Initialize submitted dates (in a real app, this would come from the database)
-    // For testing, we'll set all dates as submitted
     const initialSubmitted = {}
     dates.forEach((date) => {
-      initialSubmitted[date.toDateString()] = true // Set to true for testing
+      initialSubmitted[date.toDateString()] = false
     })
     setSubmittedDates(initialSubmitted)
   }, [examId, getAssignmentDates, selectedDate])

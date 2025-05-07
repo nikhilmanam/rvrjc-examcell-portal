@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useParams } from "next/navigation"
 import DashboardHeader from "@/components/dashboard/dashboard-header"
 import { ArrowLeft, Calendar, Clock, UserPlus } from "lucide-react"
 import { employees, useAuthStore, useAssignmentStore } from "@/lib/data"
@@ -9,6 +9,8 @@ import { isEmployeeChangeAllowed } from "@/lib/utils"
 
 export default function ManageStaff() {
   const router = useRouter()
+  const params = useParams()
+  const examId = params?.examId || null
   const { user } = useAuthStore()
   const { addAssignment, getAssignmentsByDepartment, removeAssignment } = useAssignmentStore()
   const [selectedDate, setSelectedDate] = useState("")
@@ -24,13 +26,13 @@ export default function ManageStaff() {
 
   // Load previously saved employees when component mounts
   useEffect(() => {
-    // Get all assignments for this department
-    const savedAssignments = getAssignmentsByDepartment(userDepartment)
-
+    if (!examId) return
+    // Get all assignments for this department and exam
+    const savedAssignments = getAssignmentsByDepartment(examId, userDepartment)
     if (savedAssignments && savedAssignments.length > 0) {
       setSelectedEmployees(savedAssignments)
     }
-  }, [userDepartment, getAssignmentsByDepartment])
+  }, [userDepartment, getAssignmentsByDepartment, examId])
 
   // Update current time every minute
   useEffect(() => {
@@ -42,7 +44,7 @@ export default function ManageStaff() {
   }, [])
 
   const handleAddEmployee = () => {
-    if (!selectedEmployee || !selectedDate) return
+    if (!selectedEmployee || !selectedDate || !examId) return
 
     // Find the employee in the department
     const employee = departmentEmployees.find((emp) => emp.id === selectedEmployee)
@@ -81,6 +83,7 @@ export default function ManageStaff() {
   }
 
   const handleRemoveEmployee = (id, date, session) => {
+    if (!examId) return
     // Check if changes are allowed (2 hours before exam)
     if (!isEmployeeChangeAllowed(date, session)) {
       alert("Changes cannot be made within 2 hours of the examination time.")
@@ -94,20 +97,27 @@ export default function ManageStaff() {
 
     // Also remove from the store
     const assignmentId = `${id}-${date}-${session}`
-    removeAssignment(null, userDepartment, assignmentId)
+    removeAssignment(examId, userDepartment, assignmentId)
   }
 
   const handleSaveList = () => {
+    if (!examId) {
+      alert("No exam selected. Please access this page from the exam dashboard.")
+      return
+    }
+    // Clear existing assignments for this department and exam first
+    const existingAssignments = getAssignmentsByDepartment(examId, userDepartment)
+    existingAssignments.forEach((assignment) => {
+      removeAssignment(examId, userDepartment, assignment.id)
+    })
     // Save each employee assignment to the assignment store
     selectedEmployees.forEach((employee) => {
-      // Add to the assignment store - using null for examId since we're organizing by department
       addAssignment(
-        null, // We're not using exam ID for this view
+        examId,
         userDepartment,
         employee,
       )
     })
-
     alert("Employee list saved successfully!")
     router.push("/coordinator/dashboard")
   }
