@@ -11,7 +11,7 @@ export default function CoordinatorDashboard() {
   const { examinations } = useExamStore()
 
   const handleManageStaff = (examId) => {
-    router.push(`/coordinator/manage-staff/${examId}`)
+    router.push(`/coordinator/manage-staff?examId=${examId}`)
   }
 
   const handleViewRequirements = (examId) => {

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useAssignmentStore, departments } from "@/lib/data"
-import { Check, RefreshCw } from "lucide-react"
+import { Check, RefreshCw, Download } from "lucide-react"
 
 export default function DepartmentAssignments({ examId }) {
   const { getAssignmentDates, getAssignmentsByDate } = useAssignmentStore()
@@ -10,6 +10,7 @@ export default function DepartmentAssignments({ examId }) {
   const [assignmentDates, setAssignmentDates] = useState([])
   const [dateAssignments, setDateAssignments] = useState({})
   const [submittedDates, setSubmittedDates] = useState({})
+  const [selectedDate, setSelectedDate] = useState(null)
 
   useEffect(() => {
     // Load all assignment dates for this exam
@@ -29,6 +30,11 @@ export default function DepartmentAssignments({ examId }) {
       allDateAssignments[date.toDateString()] = getAssignmentsByDate(examId, date)
     })
     setDateAssignments(allDateAssignments)
+
+    // Set first date as selected by default
+    if (dates.length > 0) {
+      setSelectedDate(dates[0])
+    }
 
     setLoading(false)
   }, [examId, getAssignmentDates, getAssignmentsByDate])
@@ -51,151 +57,118 @@ export default function DepartmentAssignments({ examId }) {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center py-12">
-        <RefreshCw className="animate-spin mr-2" size={20} />
-        <span>Loading assignments...</span>
-      </div>
-    )
-  }
-
-  if (assignmentDates.length === 0) {
-    return (
-      <div className="text-center py-12">
-        <p className="text-gray-500 mb-2">No dates with assignments yet.</p>
-        <p className="text-gray-500">Wait for coordinators to assign employees.</p>
+      <div className="flex items-center justify-center p-8">
+        <RefreshCw className="animate-spin text-blue-500" size={24} />
       </div>
     )
   }
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-xl font-bold">Department Assignments</h2>
-        <button onClick={handleDownloadCSV} className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">
-          Download CSV
-        </button>
+      {/* Date Selection */}
+      <div className="flex space-x-2 mb-6 overflow-x-auto pb-2">
+        {assignmentDates.map((date) => (
+          <button
+            key={date.toDateString()}
+            onClick={() => setSelectedDate(date)}
+            className={`px-4 py-2 rounded ${
+              selectedDate?.toDateString() === date.toDateString()
+                ? "bg-blue-500 text-white"
+                : "bg-gray-100 hover:bg-gray-200 text-gray-700"
+            }`}
+          >
+            {date.toLocaleDateString()}
+          </button>
+        ))}
       </div>
 
-      {assignmentDates.map((date) => {
-        const dateStr = date.toDateString()
-        const assignments = dateAssignments[dateStr] || {}
-        const hasAssignments = Object.values(assignments).some((arr) => arr.length > 0)
+      {selectedDate && (
+        <div>
+          {/* Morning Session */}
+          <div className="mb-8">
+            <h3 className="text-lg font-semibold mb-4">Morning Session</h3>
+            <div className="space-y-4">
+              {Object.entries(dateAssignments[selectedDate.toDateString()] || {}).map(([deptId, assignments]) => {
+                const morningAssignments = assignments.filter((a) => a.session === "AM")
+                if (morningAssignments.length === 0) return null
 
-        if (!hasAssignments) return null
-
-        return (
-          <div key={dateStr} className="mb-8 border rounded-lg overflow-hidden">
-            <div className="bg-gray-100 p-4 flex justify-between items-center">
-              <h3 className="font-bold text-lg">{date.toLocaleDateString()}</h3>
-              <div>
-                {submittedDates[dateStr] ? (
-                  <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full flex items-center">
-                    <Check size={16} className="mr-1" />
-                    Approved
-                  </span>
-                ) : (
-                  <button
-                    onClick={() => handleSubmitDate(dateStr)}
-                    className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
-                  >
-                    Submit Final Approval
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div className="p-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Morning Session */}
-                <div className="border rounded-lg overflow-hidden">
-                  <div className="bg-amber-100 p-3">
-                    <h4 className="font-medium">Morning Session (AM)</h4>
-                  </div>
-                  <div className="p-3">
-                    {departments.map((dept) => {
-                      const deptAssignments = assignments[dept] || []
-                      const morningAssignments = deptAssignments.filter((a) => a.session === "AM")
-
-                      if (morningAssignments.length === 0) return null
-
-                      return (
-                        <div key={`${dept}-AM`} className="mb-4 last:mb-0">
-                          <h5 className="font-medium text-sm mb-2 bg-gray-100 p-2 rounded">{dept}</h5>
-                          <table className="min-w-full text-sm">
-                            <thead>
-                              <tr className="bg-gray-50">
-                                <th className="py-2 px-3 text-left">ID</th>
-                                <th className="py-2 px-3 text-left">Name</th>
-                                <th className="py-2 px-3 text-left">Designation</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {morningAssignments.map((employee) => (
-                                <tr key={`${employee.id}-AM`} className="border-t">
-                                  <td className="py-2 px-3">{employee.id}</td>
-                                  <td className="py-2 px-3">{employee.name}</td>
-                                  <td className="py-2 px-3">{employee.designation}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                return (
+                  <div key={deptId} className="bg-gray-50 p-4 rounded-lg">
+                    <h4 className="font-medium mb-2">{departments[deptId]}</h4>
+                    <div className="space-y-2">
+                      {morningAssignments.map((assignment) => (
+                        <div key={assignment.id} className="flex items-center justify-between bg-white p-2 rounded">
+                          <div>
+                            <span className="font-medium">{assignment.name}</span>
+                            <span className="text-gray-600 ml-2">({assignment.designation})</span>
+                          </div>
                         </div>
-                      )
-                    })}
-                    {!departments.some((dept) => {
-                      const deptAssignments = assignments[dept] || []
-                      return deptAssignments.some((a) => a.session === "AM")
-                    }) && <p className="text-gray-500 py-2">No employees assigned for morning session</p>}
+                      ))}
+                    </div>
                   </div>
-                </div>
-
-                {/* Afternoon Session */}
-                <div className="border rounded-lg overflow-hidden">
-                  <div className="bg-indigo-100 p-3">
-                    <h4 className="font-medium">Afternoon Session (PM)</h4>
-                  </div>
-                  <div className="p-3">
-                    {departments.map((dept) => {
-                      const deptAssignments = assignments[dept] || []
-                      const afternoonAssignments = deptAssignments.filter((a) => a.session === "PM")
-
-                      if (afternoonAssignments.length === 0) return null
-
-                      return (
-                        <div key={`${dept}-PM`} className="mb-4 last:mb-0">
-                          <h5 className="font-medium text-sm mb-2 bg-gray-100 p-2 rounded">{dept}</h5>
-                          <table className="min-w-full text-sm">
-                            <thead>
-                              <tr className="bg-gray-50">
-                                <th className="py-2 px-3 text-left">ID</th>
-                                <th className="py-2 px-3 text-left">Name</th>
-                                <th className="py-2 px-3 text-left">Designation</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {afternoonAssignments.map((employee) => (
-                                <tr key={`${employee.id}-PM`} className="border-t">
-                                  <td className="py-2 px-3">{employee.id}</td>
-                                  <td className="py-2 px-3">{employee.name}</td>
-                                  <td className="py-2 px-3">{employee.designation}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )
-                    })}
-                    {!departments.some((dept) => {
-                      const deptAssignments = assignments[dept] || []
-                      return deptAssignments.some((a) => a.session === "PM")
-                    }) && <p className="text-gray-500 py-2">No employees assigned for afternoon session</p>}
-                  </div>
-                </div>
-              </div>
+                )
+              })}
             </div>
           </div>
-        )
-      })}
+
+          {/* Afternoon Session */}
+          <div className="mb-8">
+            <h3 className="text-lg font-semibold mb-4">Afternoon Session</h3>
+            <div className="space-y-4">
+              {Object.entries(dateAssignments[selectedDate.toDateString()] || {}).map(([deptId, assignments]) => {
+                const afternoonAssignments = assignments.filter((a) => a.session === "PM")
+                if (afternoonAssignments.length === 0) return null
+
+                return (
+                  <div key={deptId} className="bg-gray-50 p-4 rounded-lg">
+                    <h4 className="font-medium mb-2">{departments[deptId]}</h4>
+                    <div className="space-y-2">
+                      {afternoonAssignments.map((assignment) => (
+                        <div key={assignment.id} className="flex items-center justify-between bg-white p-2 rounded">
+                          <div>
+                            <span className="font-medium">{assignment.name}</span>
+                            <span className="text-gray-600 ml-2">({assignment.designation})</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="flex justify-between items-center mt-6">
+            <button
+              onClick={handleDownloadCSV}
+              className="flex items-center text-gray-600 hover:text-gray-800"
+            >
+              <Download className="mr-2" size={18} />
+              Download CSV
+            </button>
+
+            {!submittedDates[selectedDate.toDateString()] && (
+              <button
+                onClick={() => handleSubmitDate(selectedDate.toDateString())}
+                className="flex items-center bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded"
+              >
+                <Check className="mr-2" size={18} />
+                Submit for Room Allocation
+              </button>
+            )}
+          </div>
+
+          {submittedDates[selectedDate.toDateString()] && (
+            <div className="mt-4 p-4 bg-green-50 text-green-700 rounded-lg">
+              <div className="flex items-center">
+                <Check className="mr-2" size={18} />
+                <span>Submitted for room allocation</span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

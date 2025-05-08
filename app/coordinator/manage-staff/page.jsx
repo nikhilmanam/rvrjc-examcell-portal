@@ -1,38 +1,54 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useRouter, useParams } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import DashboardHeader from "@/components/dashboard/dashboard-header"
-import { ArrowLeft, Calendar, Clock, UserPlus } from "lucide-react"
-import { employees, useAuthStore, useAssignmentStore } from "@/lib/data"
+import { ArrowLeft, Calendar, Clock, UserPlus, Trash2 } from "lucide-react"
+import { employees, useAuthStore, useAssignmentStore, useExamStore } from "@/lib/data"
 import { isEmployeeChangeAllowed } from "@/lib/utils"
 
 export default function ManageStaff() {
   const router = useRouter()
-  const params = useParams()
-  const examId = params?.examId || null
+  const searchParams = useSearchParams()
+  const examId = searchParams.get('examId')
   const { user } = useAuthStore()
+  const { examinations } = useExamStore()
   const { addAssignment, getAssignmentsByDepartment, removeAssignment } = useAssignmentStore()
   const [selectedDate, setSelectedDate] = useState("")
   const [selectedSession, setSelectedSession] = useState("AM")
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedEmployee, setSelectedEmployee] = useState("")
   const [selectedEmployees, setSelectedEmployees] = useState([])
+  const [originalEmployees, setOriginalEmployees] = useState([]) // Track original state
+  const [hasChanges, setHasChanges] = useState(false) // Track if changes were made
   const [currentTime, setCurrentTime] = useState(new Date())
+  const [isLoading, setIsLoading] = useState(true)
 
   // Get department from user
   const userDepartment = user?.department || "CSE"
   const departmentEmployees = employees[userDepartment] || []
 
+  // Get exam details
+  const exam = examinations.find((e) => e.id === examId)
+  const examDates = exam ? getExamDates(exam.startDate, exam.endDate) : []
+
   // Load previously saved employees when component mounts
   useEffect(() => {
     if (!examId) return
-    // Get all assignments for this department and exam
-    const savedAssignments = getAssignmentsByDepartment(examId, userDepartment)
-    if (savedAssignments && savedAssignments.length > 0) {
-      setSelectedEmployees(savedAssignments)
+    setIsLoading(true)
+    try {
+      // Get all assignments for this department and exam
+      const savedAssignments = getAssignmentsByDepartment(examId, userDepartment)
+      if (savedAssignments && savedAssignments.length > 0) {
+        setSelectedEmployees(savedAssignments)
+        setOriginalEmployees(savedAssignments) // Store original state
+      }
+    } catch (error) {
+      console.error("Error loading saved assignments:", error)
+    } finally {
+      setIsLoading(false)
     }
-  }, [userDepartment, getAssignmentsByDepartment, examId])
+  }, [examId, userDepartment, getAssignmentsByDepartment])
 
   // Update current time every minute
   useEffect(() => {
@@ -42,6 +58,19 @@ export default function ManageStaff() {
 
     return () => clearInterval(timer)
   }, [])
+
+  // Set first date as selected by default
+  useEffect(() => {
+    if (examDates.length > 0 && !selectedDate) {
+      setSelectedDate(examDates[0])
+    }
+  }, [examDates, selectedDate])
+
+  // Check for changes whenever selectedEmployees changes
+  useEffect(() => {
+    const hasChanges = JSON.stringify(selectedEmployees) !== JSON.stringify(originalEmployees)
+    setHasChanges(hasChanges)
+  }, [selectedEmployees, originalEmployees])
 
   const handleAddEmployee = () => {
     if (!selectedEmployee || !selectedDate || !examId) return
@@ -105,19 +134,38 @@ export default function ManageStaff() {
       alert("No exam selected. Please access this page from the exam dashboard.")
       return
     }
-    // Clear existing assignments for this department and exam first
+
+    if (!hasChanges) {
+      alert("No changes to save.")
+      return
+    }
+
+    // Get current assignments to prevent duplicates
     const existingAssignments = getAssignmentsByDepartment(examId, userDepartment)
-    existingAssignments.forEach((assignment) => {
-      removeAssignment(examId, userDepartment, assignment.id)
+    
+    // Create a map of existing assignments for quick lookup
+    const existingAssignmentsMap = new Map(
+      existingAssignments.map(assignment => [
+        `${assignment.id}-${assignment.date}-${assignment.session}`,
+        assignment
+      ])
+    )
+
+    // Filter out assignments that already exist
+    const newAssignments = selectedEmployees.filter(employee => {
+      const key = `${employee.id}-${employee.date}-${employee.session}`
+      return !existingAssignmentsMap.has(key)
     })
-    // Save each employee assignment to the assignment store
-    selectedEmployees.forEach((employee) => {
-      addAssignment(
-        examId,
-        userDepartment,
-        employee,
-      )
+
+    // Only add new assignments
+    newAssignments.forEach(employee => {
+      addAssignment(examId, userDepartment, employee)
     })
+
+    // Update original state after saving
+    setOriginalEmployees(selectedEmployees)
+    setHasChanges(false)
+
     alert("Employee list saved successfully!")
     router.push("/coordinator/dashboard")
   }
@@ -133,9 +181,39 @@ export default function ManageStaff() {
     )
   })
 
-  // Check if employee can be changed (within 2 hours of exam time)
-  const canChangeEmployee = (date, session) => {
-    return isEmployeeChangeAllowed(date, session)
+  // Get employees for selected date and session
+  const getEmployeesForDateAndSession = (date, session) => {
+    return selectedEmployees.filter(
+      (emp) => emp.date === date && emp.session === session
+    )
+  }
+
+  if (!examId || !exam) {
+    return (
+      <div className="container mx-auto p-8">
+        <div className="bg-white rounded-lg shadow-md p-6 text-center">
+          <h2 className="text-xl font-bold text-red-600 mb-4">Invalid Examination</h2>
+          <p className="text-gray-600 mb-4">The selected examination could not be found.</p>
+          <button
+            onClick={() => router.push("/coordinator/dashboard")}
+            className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded"
+          >
+            Return to Dashboard
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (isLoading) {
+    return (
+      <div className="container mx-auto p-8">
+        <div className="bg-white rounded-lg shadow-md p-6 text-center">
+          <h2 className="text-xl font-bold mb-4">Loading...</h2>
+          <p className="text-gray-600">Please wait while we load the employee assignments.</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -157,168 +235,187 @@ export default function ManageStaff() {
       </div>
 
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-          <div>
-            <label className="flex items-center mb-2 font-medium">
-              <Calendar className="mr-2" size={18} />
-              Select Date
-            </label>
+        <h2 className="text-xl font-bold mb-4">{exam.title}</h2>
+        <p className="text-gray-600 mb-4">
+          {new Date(exam.startDate).toLocaleDateString()} - {new Date(exam.endDate).toLocaleDateString()}
+        </p>
+
+        {/* Date Tabs */}
+        <div className="flex space-x-2 mb-6 overflow-x-auto pb-2">
+          {examDates.map((date) => (
+            <button
+              key={date}
+              onClick={() => setSelectedDate(date)}
+              className={`px-4 py-2 rounded ${
+                selectedDate === date
+                  ? "bg-blue-500 text-white"
+                  : "bg-gray-100 hover:bg-gray-200 text-gray-700"
+              }`}
+            >
+              {new Date(date).toLocaleDateString()}
+            </button>
+          ))}
+        </div>
+
+        {/* Session Selection */}
+        <div className="mb-6">
+          <div className="flex space-x-4">
+            <button
+              onClick={() => setSelectedSession("AM")}
+              className={`px-4 py-2 rounded ${
+                selectedSession === "AM"
+                  ? "bg-blue-500 text-white"
+                  : "bg-gray-100 hover:bg-gray-200 text-gray-700"
+              }`}
+            >
+              Morning Session
+            </button>
+            <button
+              onClick={() => setSelectedSession("PM")}
+              className={`px-4 py-2 rounded ${
+                selectedSession === "PM"
+                  ? "bg-blue-500 text-white"
+                  : "bg-gray-100 hover:bg-gray-200 text-gray-700"
+              }`}
+            >
+              Afternoon Session
+            </button>
+          </div>
+        </div>
+
+        {/* Employee Selection */}
+        <div className="mb-6">
+          <div className="flex items-center mb-4">
             <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
+              type="text"
+              placeholder="Search employees..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full p-2 border rounded"
             />
           </div>
 
-          <div>
-            <label className="flex items-center mb-2 font-medium">
-              <Clock className="mr-2" size={18} />
-              Select Session
-            </label>
-            <div className="flex space-x-2">
-              <button
-                className={`px-4 py-2 rounded ${
-                  selectedSession === "AM" ? "bg-blue-500 text-white" : "bg-gray-200 text-gray-700"
-                }`}
-                onClick={() => setSelectedSession("AM")}
-              >
-                AM
-              </button>
-              <button
-                className={`px-4 py-2 rounded ${
-                  selectedSession === "PM" ? "bg-blue-500 text-white" : "bg-gray-200 text-gray-700"
-                }`}
-                onClick={() => setSelectedSession("PM")}
-              >
-                PM
-              </button>
+          <div className="mb-6">
+            <label className="block mb-2 font-medium">Select Employee</label>
+            <select
+              value={selectedEmployee}
+              onChange={(e) => setSelectedEmployee(e.target.value)}
+              className="w-full p-3 border rounded"
+            >
+              <option value="">-- Select an Employee --</option>
+              {filteredEmployees.map((emp) => (
+                <option key={emp.id} value={emp.id}>
+                  {emp.name} - {emp.designation}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="mb-6">
+            <button
+              onClick={handleAddEmployee}
+              className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded flex items-center"
+              disabled={!selectedDate || !selectedEmployee}
+            >
+              <UserPlus className="mr-2" size={18} />
+              Add Employee for {selectedDate ? new Date(selectedDate).toLocaleDateString() : "selected date"} (
+              {selectedSession})
+            </button>
+          </div>
+        </div>
+
+        {/* Selected Employees List */}
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-bold">Selected Employees</h2>
+            <div className="bg-gray-200 px-3 py-1 rounded">
+              Current Date: {currentTime.toLocaleDateString()}
             </div>
           </div>
-        </div>
 
-        <div className="mb-6">
-          <input
-            type="text"
-            placeholder="Search by name, ID or designation..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full p-3 border rounded"
-          />
-        </div>
-
-        <div className="mb-6">
-          <label className="block mb-2 font-medium">Select Employee</label>
-          <select
-            value={selectedEmployee}
-            onChange={(e) => setSelectedEmployee(e.target.value)}
-            className="w-full p-3 border rounded"
-          >
-            <option value="">-- Select an Employee --</option>
-            {filteredEmployees.map((emp) => (
-              <option key={emp.id} value={emp.id}>
-                {emp.name} - {emp.designation}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="mb-6">
-          <button
-            onClick={handleAddEmployee}
-            className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded flex items-center"
-            disabled={!selectedDate || !selectedEmployee}
-          >
-            <UserPlus className="mr-2" size={18} />
-            Add Employee for {selectedDate ? new Date(selectedDate).toLocaleDateString() : "selected date"} (
-            {selectedSession})
-          </button>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-bold">Selected Employees (Today & Future Dates Only)</h2>
-          <div className="bg-gray-200 px-3 py-1 rounded">Current Date: {currentTime.toLocaleDateString()}</div>
-        </div>
-
-        <div className="mb-4 p-4 bg-blue-50 rounded-lg">
-          <p className="text-blue-800">
-            <strong>Note:</strong> You can only change employees up to 2 hours before the examination time.
-          </p>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="min-w-full bg-white">
-            <thead className="bg-gray-100">
-              <tr>
-                <th className="py-2 px-4 border-b text-left">ID</th>
-                <th className="py-2 px-4 border-b text-left">Name</th>
-                <th className="py-2 px-4 border-b text-left">Department</th>
-                <th className="py-2 px-4 border-b text-left">Designation</th>
-                <th className="py-2 px-4 border-b text-left">Date</th>
-                <th className="py-2 px-4 border-b text-left">Session</th>
-                <th className="py-2 px-4 border-b text-left">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {selectedEmployees.length > 0 ? (
-                selectedEmployees.map((employee) => {
-                  const canChange = canChangeEmployee(employee.date, employee.session)
-                  return (
-                    <tr key={`${employee.id}-${employee.date}-${employee.session}`}>
-                      <td className="py-2 px-4 border-b">{employee.id}</td>
-                      <td className="py-2 px-4 border-b">{employee.name}</td>
-                      <td className="py-2 px-4 border-b">{employee.department}</td>
-                      <td className="py-2 px-4 border-b">{employee.designation}</td>
-                      <td className="py-2 px-4 border-b">
-                        {new Date(employee.date).toLocaleDateString()}
-                        {new Date(employee.date).toDateString() === new Date().toDateString() && (
-                          <span className="ml-2 bg-green-100 text-green-800 text-xs px-2 py-1 rounded">Today</span>
-                        )}
-                      </td>
-                      <td className="py-2 px-4 border-b">
-                        <span className="bg-amber-400 px-2 py-1 rounded text-black">{employee.session}</span>
-                      </td>
-                      <td className="py-2 px-4 border-b">
-                        {canChange ? (
-                          <button
-                            onClick={() => handleRemoveEmployee(employee.id, employee.date, employee.session)}
-                            className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm"
-                          >
-                            Remove
-                          </button>
-                        ) : (
-                          <span className="text-gray-500 text-sm">Locked</span>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })
-              ) : (
-                <tr>
-                  <td colSpan="7" className="py-4 text-center text-gray-500">
-                    No employees selected yet
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="mt-6 flex justify-between items-center">
-          <div className="text-gray-600">
-            <span className="bg-gray-200 rounded-full w-6 h-6 inline-flex items-center justify-center mr-2">
-              {selectedEmployees.length}
-            </span>
-            of {selectedEmployees.length} employees shown (past dates hidden)
+          <div className="mb-4 p-4 bg-blue-50 rounded-lg">
+            <p className="text-blue-800">
+              <strong>Note:</strong> You can only change employees up to 2 hours before the examination time.
+            </p>
           </div>
 
-          <button onClick={handleSaveList} className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">
-            Save Employee List
-          </button>
+          {/* Morning Session Employees */}
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold mb-3">Morning Session</h3>
+            <div className="space-y-2">
+              {getEmployeesForDateAndSession(selectedDate, "AM").map((emp) => (
+                <div
+                  key={emp.id}
+                  className="flex items-center justify-between bg-gray-50 p-3 rounded"
+                >
+                  <div>
+                    <span className="font-medium">{emp.name}</span>
+                    <span className="text-gray-600 ml-2">({emp.designation})</span>
+                  </div>
+                  <button
+                    onClick={() => handleRemoveEmployee(emp.id, emp.date, emp.session)}
+                    className="text-red-500 hover:text-red-700"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Afternoon Session Employees */}
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold mb-3">Afternoon Session</h3>
+            <div className="space-y-2">
+              {getEmployeesForDateAndSession(selectedDate, "PM").map((emp) => (
+                <div
+                  key={emp.id}
+                  className="flex items-center justify-between bg-gray-50 p-3 rounded"
+                >
+                  <div>
+                    <span className="font-medium">{emp.name}</span>
+                    <span className="text-gray-600 ml-2">({emp.designation})</span>
+                  </div>
+                  <button
+                    onClick={() => handleRemoveEmployee(emp.id, emp.date, emp.session)}
+                    className="text-red-500 hover:text-red-700"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex justify-end">
+            <button
+              onClick={handleSaveList}
+              disabled={!hasChanges}
+              className={`px-6 py-2 rounded ${
+                hasChanges
+                  ? "bg-blue-500 hover:bg-blue-600 text-white"
+                  : "bg-gray-300 text-gray-500 cursor-not-allowed"
+              }`}
+            >
+              Save All Employees
+            </button>
+          </div>
         </div>
       </div>
     </div>
   )
+}
+
+// Helper function to get all dates between start and end date
+function getExamDates(startDate, endDate) {
+  const dates = []
+  const currentDate = new Date(startDate)
+  const lastDate = new Date(endDate)
+
+  while (currentDate <= lastDate) {
+    dates.push(new Date(currentDate).toISOString().split('T')[0])
+    currentDate.setDate(currentDate.getDate() + 1)
+  }
+
+  return dates
 }

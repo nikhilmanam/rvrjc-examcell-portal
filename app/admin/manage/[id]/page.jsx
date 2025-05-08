@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Users, Calendar } from "lucide-react"
+import { ArrowLeft, Users, Calendar, Building2 } from "lucide-react"
 import DashboardHeader from "@/components/dashboard/dashboard-header"
 import DepartmentAssignments from "@/components/admin/department-assignments"
 import RoomAllocation from "@/components/admin/room-allocation"
@@ -51,48 +51,48 @@ export default function ManageExam({ params }) {
           </button>
         </div>
 
-        <div className="mb-6">
-          <div className="flex items-center mb-2">
-            <Calendar className="mr-2 text-gray-500" size={18} />
-            <span className="text-gray-700">
+        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-xl font-bold">Exam Details</h2>
+            <div className="text-gray-600">
               {new Date(exam.startDate).toLocaleDateString()} - {new Date(exam.endDate).toLocaleDateString()}
-            </span>
+            </div>
           </div>
 
-          <div className="flex items-center">
-            <Users className="mr-2 text-gray-500" size={18} />
-            <span className="text-gray-700">Sessions: Morning & Afternoon</span>
-          </div>
-        </div>
-
-        <div className="mb-6 border-b">
-          <div className="flex">
+          {/* Tab Navigation */}
+          <div className="flex space-x-4 mb-6">
             <button
-              className={`py-2 px-4 font-medium ${
-                activeTab === "assignments"
-                  ? "text-blue-600 border-b-2 border-blue-600"
-                  : "text-gray-500 hover:text-gray-700"
-              }`}
               onClick={() => setActiveTab("assignments")}
+              className={`flex items-center px-4 py-2 rounded ${
+                activeTab === "assignments"
+                  ? "bg-blue-500 text-white"
+                  : "bg-gray-100 hover:bg-gray-200 text-gray-700"
+              }`}
             >
-              Department Assignments
+              <Users className="mr-2" size={18} />
+              Employee Assignments
             </button>
             <button
-              className={`py-2 px-4 font-medium ${
-                activeTab === "allocation"
-                  ? "text-blue-600 border-b-2 border-blue-600"
-                  : "text-gray-500 hover:text-gray-700"
+              onClick={() => setActiveTab("rooms")}
+              className={`flex items-center px-4 py-2 rounded ${
+                activeTab === "rooms"
+                  ? "bg-blue-500 text-white"
+                  : "bg-gray-100 hover:bg-gray-200 text-gray-700"
               }`}
-              onClick={() => setActiveTab("allocation")}
             >
+              <Building2 className="mr-2" size={18} />
               Room Allocation
             </button>
           </div>
-        </div>
 
-        <div className="bg-white rounded-lg shadow-md p-6">
-          {activeTab === "assignments" && <DepartmentAssignments examId={examId} />}
-          {activeTab === "allocation" && <RoomAllocation examId={examId} />}
+          {/* Tab Content */}
+          <div className="mt-6">
+            {activeTab === "assignments" ? (
+              <DepartmentAssignments examId={examId} />
+            ) : (
+              <RoomAllocation examId={examId} />
+            )}
+          </div>
         </div>
       </div>
     </AuthGuard>

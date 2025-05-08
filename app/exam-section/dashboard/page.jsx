@@ -1,13 +1,13 @@
 "use client"
 import { useRouter } from "next/navigation"
 import DashboardHeader from "@/components/dashboard/dashboard-header"
-import { Plus } from "lucide-react"
+import { Plus, Trash2 } from "lucide-react"
 import { useExamStore, useAuthStore } from "@/lib/data"
 import AuthGuard from "@/components/auth/auth-guard"
 
 export default function ExamSectionDashboard() {
   const router = useRouter()
-  const { examinations } = useExamStore()
+  const { examinations, deleteExamination } = useExamStore()
   const { user } = useAuthStore()
 
   const handleCreateExam = () => {
@@ -16,6 +16,12 @@ export default function ExamSectionDashboard() {
 
   const handleManageExam = (examId) => {
     router.push(`/exam-section/manage/${examId}`)
+  }
+
+  const handleDeleteExam = (examId) => {
+    if (window.confirm("Are you sure you want to delete this examination series? This action cannot be undone.")) {
+      deleteExamination(examId)
+    }
   }
 
   return (
@@ -38,8 +44,15 @@ export default function ExamSectionDashboard() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {examinations.map((exam) => (
               <div key={exam.id} className="bg-white rounded-lg shadow-md overflow-hidden">
-                <div className={`p-4 ${exam.status === "complete" ? "bg-green-500" : "bg-blue-500"} text-white`}>
-                  <h3 className="font-bold text-lg truncate">{exam.title}</h3>
+                <div className={`p-4 ${exam.status === "complete" ? "bg-green-500" : "bg-blue-500"} text-white relative`}>
+                  <h3 className="font-bold text-lg truncate pr-8">{exam.title}</h3>
+                  <button
+                    onClick={() => handleDeleteExam(exam.id)}
+                    className="absolute top-4 right-4 text-white hover:text-red-200 transition-colors"
+                    title="Delete examination"
+                  >
+                    <Trash2 size={18} />
+                  </button>
                 </div>
 
                 <div className="p-4">
