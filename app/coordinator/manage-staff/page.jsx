@@ -4,8 +4,9 @@ import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import DashboardHeader from "@/components/dashboard/dashboard-header"
 import { ArrowLeft, Calendar, Clock, UserPlus, Trash2 } from "lucide-react"
-import { employees, useAuthStore, useAssignmentStore, useExamStore } from "@/lib/data"
+import { useAuthStore, useAssignmentStore, useExamStore } from "@/lib/data"
 import { isEmployeeChangeAllowed } from "@/lib/utils"
+import { useDepartmentEmployees } from "@/lib/hooks"
 
 export default function ManageStaff() {
   const router = useRouter()
@@ -24,9 +25,13 @@ export default function ManageStaff() {
   const [currentTime, setCurrentTime] = useState(new Date())
   const [isLoading, setIsLoading] = useState(true)
 
-  // Get department from user
+  // Map department name to departmentId (adjust as needed)
+  const departmentMap = {
+    CSE: 1, CSBS: 2, "CSE(DS)": 3, "CSE(AILML)": 4, "CSE(IOT)": 5, IT: 6, ECE: 7, EEE: 8, CHE: 9, CIVIL: 10, MECH: 11, MCA: 12, MBA: 13
+  }
   const userDepartment = user?.department || "CSE"
-  const departmentEmployees = employees[userDepartment] || []
+  const departmentId = departmentMap[userDepartment] || 1
+  const departmentEmployees = useDepartmentEmployees(departmentId)
 
   // Get exam details
   const exam = examinations.find((e) => e.id === examId)

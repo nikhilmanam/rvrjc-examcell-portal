@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react"
 import { ArrowLeft, Calendar, Clock } from "lucide-react"
-import { employees, isEmployeeChangeAllowed, useAssignmentStore } from "@/lib/data"
+import { isEmployeeChangeAllowed, useAssignmentStore } from "@/lib/data"
+import { useDepartmentEmployees } from "@/lib/hooks"
 
 export default function ManageStaffModal({ onClose, department, examId }) {
   const { addAssignment } = useAssignmentStore()
@@ -13,7 +14,12 @@ export default function ManageStaffModal({ onClose, department, examId }) {
   const [selectedEmployees, setSelectedEmployees] = useState([])
   const [currentTime, setCurrentTime] = useState(new Date())
 
-  const departmentEmployees = employees[department] || []
+  // Map department name to departmentId (adjust as needed)
+  const departmentMap = {
+    CSE: 1, CSBS: 2, "CSE(DS)": 3, "CSE(AILML)": 4, "CSE(IOT)": 5, IT: 6, ECE: 7, EEE: 8, CHE: 9, CIVIL: 10, MECH: 11, MCA: 12, MBA: 13
+  }
+  const departmentId = departmentMap[department] || 1
+  const departmentEmployees = useDepartmentEmployees(departmentId)
 
   // Update current time every minute
   useEffect(() => {
@@ -288,5 +294,5 @@ export default function ManageStaffModal({ onClose, department, examId }) {
         </div>
       </div>
     </div>
-  \
+  )
 }

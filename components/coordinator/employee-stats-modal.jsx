@@ -1,18 +1,35 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Download, X } from "lucide-react"
 
 export default function EmployeeStatsModal({ onClose }) {
   const [month, setMonth] = useState("April")
   const [year, setYear] = useState("2025")
-
-  // In a real app, this would be fetched from an API
-  const employeeStats = {
+  const [employeeStats, setEmployeeStats] = useState({
     totalEmployees: 0,
     assignedEmployees: 0,
     employees: [],
-  }
+  })
+
+  useEffect(() => {
+    // Fetch all employees from the API
+    fetch("/api/employees")
+      .then(res => res.json())
+      .then(data => {
+        setEmployeeStats({
+          totalEmployees: data.length,
+          assignedEmployees: 0, // You can update this with real assignment data if available
+          employees: data.map(emp => ({
+            id: emp.id,
+            name: emp.name,
+            designation: emp.designation,
+            monthlyAssignments: 0, // Placeholder, update with real data if available
+            totalAssignments: 0, // Placeholder, update with real data if available
+          }))
+        })
+      })
+  }, [])
 
   const handleExport = () => {
     // In a real app, this would generate and download a CSV file

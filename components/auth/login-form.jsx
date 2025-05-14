@@ -1,43 +1,72 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
-import { users } from "@/lib/data"
 import { useAuthStore } from "@/lib/data"
+import { Download } from "lucide-react"
 
 export default function LoginForm({ userType = "Employee" }) {
   const [id, setId] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
+  const [allocations, setAllocations] = useState([])
   const router = useRouter()
-  const { login } = useAuthStore()
+  const { setUser } = useAuthStore()
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     setError("")
-
-    // Check if user exists and credentials match
-    const user = Object.values(users).find((u) => {
-      const roleMatch = u.role.toLowerCase() === userType.toLowerCase().replace(" ", "-")
-      return u.id === id && roleMatch
-    })
-
-    if (user && user.password === password) {
-      // Set authenticated user in store
-      login(user)
-
-      // Navigate to appropriate dashboard
-      const dashboardPath = `/${userType.toLowerCase().replace(" ", "-")}/dashboard`
-      router.push(dashboardPath)
-    } else {
-      setError("Invalid credentials. Please try again.")
+    try {
+      const res = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: id, password }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error || "Login failed")
+        return
+      }
+      setUser(data.user)
+      
+      // Fetch allocations for the logged-in employee
+      if (data.user.role === "employee") {
+        const allocRes = await fetch(`/api/allocations/employee/${data.user.id}`)
+        const allocData = await allocRes.json()
+        setAllocations(allocData)
+      }
+    } catch (err) {
+      setError("An error occurred during login")
     }
   }
 
-  const handleDownload = () => {
-    // In a real app, this would download the room allocation
-    alert("Room allocation download functionality will be implemented with backend integration")
+  const handleDownloadAllocations = () => {
+    // Create CSV content
+    const headers = ["Date", "Session", "Room", "Exam Title", "Status"]
+    const rows = allocations.map(alloc => [
+      new Date(alloc.date).toLocaleDateString(),
+      alloc.session,
+      alloc.room,
+      alloc.exam_title,
+      alloc.status
+    ])
+    
+    const csvContent = [
+      headers.join(","),
+      ...rows.map(row => row.join(","))
+    ].join("\n")
+    
+    // Create and download file
+    const blob = new Blob([csvContent], { type: "text/csv" })
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = "my_allocations.csv"
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    window.URL.revokeObjectURL(url)
   }
 
   return (
@@ -91,14 +120,62 @@ export default function LoginForm({ userType = "Employee" }) {
         </div>
       </div>
 
-      {userType === "Employee" && (
-        <div className="mt-8">
-          <button
-            onClick={handleDownload}
-            className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded"
-          >
-            Download Room Allocation
-          </button>
+      {/* Show allocations if employee is logged in */}
+      {allocations.length > 0 && (
+        <div className="mt-8 w-full max-w-4xl">
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold">My Allocations</h2>
+              <button
+                onClick={handleDownloadAllocations}
+                className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded flex items-center"
+              >
+                <Download className="mr-2" size={18} />
+                Download Allocations
+              </button>
+            </div>
+            
+            <div className="overflow-x-auto">
+              <table className="min-w-full bg-white border">
+                <thead>
+                  <tr className="bg-gray-100">
+                    <th className="py-2 px-4 border text-left">Date</th>
+                    <th className="py-2 px-4 border text-left">Session</th>
+                    <th className="py-2 px-4 border text-left">Room</th>
+                    <th className="py-2 px-4 border text-left">Exam Title</th>
+                    <th className="py-2 px-4 border text-left">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {allocations.map((alloc, index) => {
+                    const isPast = new Date(alloc.date) < new Date()
+                    return (
+                      <tr 
+                        key={index} 
+                        className={`border-b ${isPast ? 'bg-gray-50 text-gray-500' : ''}`}
+                      >
+                        <td className="py-2 px-4 border">
+                          {new Date(alloc.date).toLocaleDateString()}
+                        </td>
+                        <td className="py-2 px-4 border">{alloc.session}</td>
+                        <td className="py-2 px-4 border">{alloc.room}</td>
+                        <td className="py-2 px-4 border">{alloc.exam_title}</td>
+                        <td className="py-2 px-4 border">
+                          <span className={`px-2 py-1 rounded text-xs ${
+                            isPast 
+                              ? 'bg-gray-200 text-gray-600' 
+                              : 'bg-green-100 text-green-800'
+                          }`}>
+                            {isPast ? 'Completed' : 'Upcoming'}
+                          </span>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       )}
     </div>
