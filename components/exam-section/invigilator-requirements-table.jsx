@@ -2,38 +2,45 @@
 
 import React, { useState, useEffect } from "react"
 import { Download, Save, ArrowLeft } from "lucide-react"
-import { departments, useRequirementsStore } from "@/lib/data"
+import { departments } from "@/lib/data"
 import { useRouter } from "next/navigation"
 
 export default function InvigilatorRequirementsTable({ examId, dateRange }) {
   const router = useRouter()
-  const { requirements, setRequirements } = useRequirementsStore()
 
   // Initialize requirements state with zeros
   const [localRequirements, setLocalRequirements] = useState(
     dateRange.map((date) => ({
-      date: new Date(date), // Ensure date is a proper Date object
+      date: new Date(date),
       departments: departments.map((dept) => ({
         name: dept,
         morning: 0,
         afternoon: 0,
       })),
-    })),
+    }))
   )
+  const [loading, setLoading] = useState(true)
 
-  // Load existing requirements if available
+  // Load existing requirements from backend
   useEffect(() => {
-    if (requirements[examId]) {
-      setLocalRequirements(requirements[examId].map(req => ({
-        ...req,
-        date: new Date(req.date) // Ensure date is a proper Date object
-      })))
-    }
-  }, [examId, requirements])
+    if (!examId) return
+    setLoading(true)
+    fetch(`/api/requirements?examId=${examId}`)
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data) && data.length > 0) {
+          setLocalRequirements(data.map(req => ({
+            ...req,
+            date: new Date(req.date)
+          })))
+        }
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
+  }, [examId])
 
   const handleRequirementChange = (dateIndex, deptIndex, session, value) => {
     const newValue = Number.parseInt(value) || 0
-
     setLocalRequirements((prev) => {
       const newRequirements = [...prev]
       if (newRequirements[dateIndex] && newRequirements[dateIndex].departments[deptIndex]) {
@@ -43,14 +50,17 @@ export default function InvigilatorRequirementsTable({ examId, dateRange }) {
     })
   }
 
-  const handleSave = () => {
-    // Save requirements to the store
-    setRequirements(examId, localRequirements)
+  const handleSave = async () => {
+    // Save requirements to the backend
+    await fetch("/api/requirements", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ examId, requirements: localRequirements })
+    })
     alert("Requirements saved successfully!")
   }
 
   const handleDownload = () => {
-    // In a real app, this would generate and download a CSV file
     alert("Requirements downloaded as CSV")
   }
 
@@ -64,6 +74,8 @@ export default function InvigilatorRequirementsTable({ examId, dateRange }) {
       year: "numeric",
     })
   }
+
+  if (loading) return <div>Loading requirements...</div>
 
   return (
     <div>

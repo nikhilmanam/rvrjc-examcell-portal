@@ -2,11 +2,8 @@
 
 import { useState, useEffect } from "react"
 import { Download, X } from "lucide-react"
-import { useRequirementsStore } from "@/lib/data"
 
-// Remove examId from the manage staff modal since we don't need it here
 export default function ViewRequirementsModal({ onClose, examId, department }) {
-  const { requirements } = useRequirementsStore()
   const [requirementsData, setRequirementsData] = useState({
     department: department,
     totalRequired: 0,
@@ -15,38 +12,37 @@ export default function ViewRequirementsModal({ onClose, examId, department }) {
   })
 
   useEffect(() => {
-    // Get requirements for this exam
-    const examRequirements = requirements[examId] || []
-
-    // Filter requirements for this department
-    let totalRequired = 0
-    const schedule = []
-
-    examRequirements.forEach((dayReq) => {
-      const deptData = dayReq.departments.find((d) => d.name === department)
-      if (deptData) {
-        const morningCount = deptData.morning || 0
-        const afternoonCount = deptData.afternoon || 0
-        totalRequired += morningCount + afternoonCount
-
-        schedule.push({
-          date: new Date(dayReq.date).toLocaleDateString(),
-          amSession: morningCount,
-          pmSession: afternoonCount,
+    // Fetch requirements for this exam from backend
+    fetch(`/api/requirements?examId=${examId}`)
+      .then(res => res.json())
+      .then((examRequirements) => {
+        let totalRequired = 0
+        const schedule = []
+        if (Array.isArray(examRequirements)) {
+          examRequirements.forEach((dayReq) => {
+            const deptData = dayReq.departments.find((d) => d.name === department)
+            if (deptData) {
+              const morningCount = deptData.morning || 0
+              const afternoonCount = deptData.afternoon || 0
+              totalRequired += morningCount + afternoonCount
+              schedule.push({
+                date: new Date(dayReq.date).toLocaleDateString(),
+                amSession: morningCount,
+                pmSession: afternoonCount,
+              })
+            }
+          })
+        }
+        setRequirementsData({
+          department,
+          totalRequired,
+          lastUpdated: new Date().toLocaleString(),
+          schedule,
         })
-      }
-    })
-
-    setRequirementsData({
-      department,
-      totalRequired,
-      lastUpdated: new Date().toLocaleString(),
-      schedule,
-    })
-  }, [examId, department, requirements])
+      })
+  }, [examId, department])
 
   const handleDownload = () => {
-    // In a real app, this would generate and download a CSV file
     alert("Requirements downloaded as CSV")
   }
 

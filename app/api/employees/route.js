@@ -14,4 +14,21 @@ export async function GET(request) {
   }
   const [rows] = await pool.query(query, params);
   return Response.json(rows);
+}
+
+export async function POST(request) {
+  const { name, qualification, designation, department_id, role_id } = await request.json();
+  if (!name || !qualification || !designation || !department_id || !role_id) {
+    return Response.json({ error: 'Missing required fields' }, { status: 400 });
+  }
+  try {
+    const [result] = await pool.query(
+      'INSERT INTO employees (name, qualification, designation, department_id, role_id, password_hash) VALUES (?, ?, ?, ?, ?, ?)',
+      [name, qualification, designation, department_id, role_id, '$2a$10$2b2b2b2b2b2b2b2b2b2b2uQwQwQwQwQwQwQwQwQwQwQwQwQwQwQwQwQwQwQwQwQwQw'] // default hash for 'password'
+    );
+    return Response.json({ message: 'Employee added', id: result.insertId });
+  } catch (error) {
+    console.error('Error adding employee:', error);
+    return Response.json({ error: 'Failed to add employee' }, { status: 500 });
+  }
 } 

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Image from "next/image"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 import { useAuthStore } from "@/lib/data"
 import { Download } from "lucide-react"
 
@@ -12,7 +12,33 @@ export default function LoginForm({ userType = "Employee" }) {
   const [error, setError] = useState("")
   const [allocations, setAllocations] = useState([])
   const router = useRouter()
-  const { setUser } = useAuthStore()
+  const pathname = usePathname()
+  const { login, user, isAuthenticated, logout } = useAuthStore()
+
+  useEffect(() => {
+    // Map path to role
+    const pathRoleMap = {
+      "/admin/login": "admin",
+      "/employee/login": "employee",
+      "/coordinator/login": "coordinator",
+      "/exam-section/login": "exam-section",
+    };
+    const expectedRole = pathRoleMap[pathname];
+    if (isAuthenticated && user && expectedRole && user.role !== expectedRole) {
+      // If user is logged in but on a different login page, log them out
+      logout();
+      localStorage.clear(); // Clear persisted auth if using zustand persist
+    }
+  }, [pathname, isAuthenticated, user, logout]);
+
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      if (user.role === "admin") router.replace("/admin/dashboard")
+      else if (user.role === "exam-section") router.replace("/exam-section/dashboard")
+      else if (user.role === "coordinator") router.replace("/coordinator/dashboard")
+      else if (user.role === "employee") router.replace("/employee/dashboard")
+    }
+  }, [isAuthenticated, user, router])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -28,15 +54,22 @@ export default function LoginForm({ userType = "Employee" }) {
         setError(data.error || "Login failed")
         return
       }
-      setUser(data.user)
-      
-      // Fetch allocations for the logged-in employee
+      login(data.user)
+      setError("")
       if (data.user.role === "employee") {
+        // Fetch allocations for the logged-in employee
         const allocRes = await fetch(`/api/allocations/employee/${data.user.id}`)
         const allocData = await allocRes.json()
         setAllocations(allocData)
+      } else if (data.user.role === "admin") {
+        router.push("/admin/dashboard")
+      } else if (data.user.role === "exam-section") {
+        router.push("/exam-section/dashboard")
+      } else if (data.user.role === "coordinator") {
+        router.push("/coordinator/dashboard")
       }
     } catch (err) {
+      console.error("Login error:", err);
       setError("An error occurred during login")
     }
   }
@@ -88,7 +121,10 @@ export default function LoginForm({ userType = "Employee" }) {
                 type="text"
                 id="id"
                 value={id}
-                onChange={(e) => setId(e.target.value)}
+                onChange={(e) => {
+                  setId(e.target.value)
+                  setError("")
+                }}
                 className="w-full p-3 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                 required
               />
@@ -102,7 +138,10 @@ export default function LoginForm({ userType = "Employee" }) {
                 type="password"
                 id="password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => {
+                  setPassword(e.target.value)
+                  setError("")
+                }}
                 className="w-full p-3 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                 required
               />
