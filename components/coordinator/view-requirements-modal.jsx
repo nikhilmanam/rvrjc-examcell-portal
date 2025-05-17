@@ -10,40 +10,89 @@ export default function ViewRequirementsModal({ onClose, examId, department }) {
     lastUpdated: new Date().toLocaleString(),
     schedule: [],
   })
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Fetch requirements for this exam from backend
-    fetch(`/api/requirements?examId=${examId}`)
-      .then(res => res.json())
-      .then((examRequirements) => {
-        let totalRequired = 0
-        const schedule = []
-        if (Array.isArray(examRequirements)) {
-          examRequirements.forEach((dayReq) => {
-            const deptData = dayReq.departments.find((d) => d.name === department)
-            if (deptData) {
-              const morningCount = deptData.morning || 0
-              const afternoonCount = deptData.afternoon || 0
-              totalRequired += morningCount + afternoonCount
-              schedule.push({
-                date: new Date(dayReq.date).toLocaleDateString(),
-                amSession: morningCount,
-                pmSession: afternoonCount,
-              })
-            }
-          })
-        }
-        setRequirementsData({
-          department,
-          totalRequired,
-          lastUpdated: new Date().toLocaleString(),
-          schedule,
+    async function fetchRequirements() {
+      setLoading(true)
+      try {
+        // Get department ID from name
+        const deptRes = await fetch('/api/departments')
+        const departments = await deptRes.json()
+        const dept = departments.find(d => d.name === department)
+        if (!dept) return
+
+        // Get requirements for this exam and department
+        const reqRes = await fetch(`/api/requirements?exam_id=${examId}`)
+        const requirements = await reqRes.json()
+
+    // Filter requirements for this department
+        const deptRequirements = requirements.filter(r => r.department_id === dept.id)
+        
+    let totalRequired = 0
+    const schedule = []
+
+        deptRequirements.forEach((req) => {
+          const morningCount = req.morning || 0
+          const afternoonCount = req.afternoon || 0
+        totalRequired += morningCount + afternoonCount
+
+        schedule.push({
+            date: new Date(req.date).toLocaleDateString(),
+          amSession: morningCount,
+          pmSession: afternoonCount,
         })
-      })
+    })
+
+    setRequirementsData({
+      department,
+      totalRequired,
+      lastUpdated: new Date().toLocaleString(),
+          schedule: schedule.sort((a, b) => new Date(a.date) - new Date(b.date)),
+    })
+      } catch (error) {
+        console.error('Error fetching requirements:', error)
+      }
+      setLoading(false)
+    }
+    fetchRequirements()
   }, [examId, department])
 
   const handleDownload = () => {
-    alert("Requirements downloaded as CSV")
+    // Generate CSV content
+    const headers = ["Date", "AM Session", "PM Session", "Total"]
+    const rows = requirementsData.schedule.map(day => [
+      day.date,
+      day.amSession,
+      day.pmSession,
+      day.amSession + day.pmSession
+    ])
+    
+    // Create CSV content
+    const csvContent = [
+      headers.join(","),
+      ...rows.map(row => row.join(","))
+    ].join("\n")
+    
+    // Create and download file
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+    const link = document.createElement("a")
+    const url = URL.createObjectURL(blob)
+    link.setAttribute("href", url)
+    link.setAttribute("download", `requirements_${examId}_${department}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
+  if (loading) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg shadow-lg p-8">
+          <div className="text-center">Loading requirements...</div>
+        </div>
+      </div>
+    )
   }
 
   return (

@@ -4,7 +4,6 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import DashboardHeader from "@/components/dashboard/dashboard-header"
 import ExamHeader from "@/components/dashboard/exam-header"
-import { useExamStore } from "@/lib/data"
 import InvigilatorRequirementsTable from "@/components/exam-section/invigilator-requirements-table"
 import RoomManagement from "@/components/exam-section/room-management"
 import { ArrowLeft } from "lucide-react"
@@ -12,43 +11,46 @@ import { use } from "react"
 
 export default function ManageExamPage({ params }) {
   const router = useRouter()
-  const resolvedParams = use(params)
-  const examId = resolvedParams.id
-  const { examinations } = useExamStore()
+  const examId = params.id
 
   const [exam, setExam] = useState(null)
+  const [loadingExam, setLoadingExam] = useState(true)
   const [activeTab, setActiveTab] = useState("requirements")
   const [dateRange, setDateRange] = useState([])
 
   useEffect(() => {
-    // Find the examination by ID
-    const foundExam = examinations.find((e) => e.id === examId)
-
-    if (foundExam) {
-      setExam(foundExam)
-
+    async function fetchExam() {
+      setLoadingExam(true)
+      const res = await fetch(`/api/examinations/${examId}`)
+      if (res.ok) {
+        const examData = await res.json()
+        setExam(examData)
       // Generate date range between start and end dates
-      if (foundExam.startDate && foundExam.endDate) {
-        const start = new Date(foundExam.startDate)
-        const end = new Date(foundExam.endDate)
+        if (examData.start_date && examData.end_date) {
+          const start = new Date(examData.start_date)
+          const end = new Date(examData.end_date)
         const dates = []
-
         const currentDate = new Date(start)
         while (currentDate <= end) {
-          dates.push(new Date(currentDate.getTime())) // Create a new Date object for each date
+            dates.push(new Date(currentDate.getTime()))
           currentDate.setDate(currentDate.getDate() + 1)
         }
-
         setDateRange(dates)
       }
     } else {
-      // If exam not found, redirect to dashboard
-      router.push("/exam-section/dashboard")
+        setExam(null)
+      }
+      setLoadingExam(false)
     }
-  }, [examId, examinations, router])
+    if (examId) fetchExam()
+  }, [examId])
+
+  if (loadingExam) {
+    return <div className="container mx-auto p-4 text-center text-gray-600">Loading exam details...</div>
+  }
 
   if (!exam) {
-    return <div className="container mx-auto p-4">Loading...</div>
+    return <div className="container mx-auto p-4 text-center text-red-600">Exam not found.</div>
   }
 
   return (

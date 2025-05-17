@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import DashboardHeader from "@/components/dashboard/dashboard-header"
 import { ArrowLeft, Calendar, Clock, UserPlus, Trash2 } from "lucide-react"
-import { useAuthStore, useAssignmentStore, useExamStore } from "@/lib/data"
+import { useAuthStore } from "@/lib/data"
 import { isEmployeeChangeAllowed } from "@/lib/utils"
 import { useDepartmentEmployees } from "@/lib/hooks"
 
@@ -13,8 +13,6 @@ export default function ManageStaff() {
   const searchParams = useSearchParams()
   const examId = searchParams.get('examId')
   const { user } = useAuthStore()
-  const { examinations } = useExamStore()
-  const { addAssignment, getAssignmentsByDepartment, removeAssignment } = useAssignmentStore()
   const [selectedDate, setSelectedDate] = useState("")
   const [selectedSession, setSelectedSession] = useState("AM")
   const [searchQuery, setSearchQuery] = useState("")
@@ -24,6 +22,8 @@ export default function ManageStaff() {
   const [hasChanges, setHasChanges] = useState(false) // Track if changes were made
   const [currentTime, setCurrentTime] = useState(new Date())
   const [isLoading, setIsLoading] = useState(true)
+  const [exam, setExam] = useState(null)
+  const [loadingExam, setLoadingExam] = useState(true)
 
   // Map department name to departmentId (adjust as needed)
   const departmentMap = {
@@ -34,26 +34,47 @@ export default function ManageStaff() {
   const departmentEmployees = useDepartmentEmployees(departmentId)
 
   // Get exam details
-  const exam = examinations.find((e) => e.id === examId)
-  const examDates = exam ? getExamDates(exam.startDate, exam.endDate) : []
-
-  // Load previously saved employees when component mounts
   useEffect(() => {
-    if (!examId) return
-    setIsLoading(true)
-    try {
-      // Get all assignments for this department and exam
-      const savedAssignments = getAssignmentsByDepartment(examId, userDepartment)
-      if (savedAssignments && savedAssignments.length > 0) {
-        setSelectedEmployees(savedAssignments)
-        setOriginalEmployees(savedAssignments) // Store original state
+    async function fetchExam() {
+      setLoadingExam(true)
+      if (!examId) {
+        setExam(null)
+        setLoadingExam(false)
+        return
       }
-    } catch (error) {
-      console.error("Error loading saved assignments:", error)
-    } finally {
-      setIsLoading(false)
+      const res = await fetch(`/api/examinations/${examId}`)
+      if (res.ok) {
+        setExam(await res.json())
+      } else {
+        setExam(null)
+      }
+      setLoadingExam(false)
     }
-  }, [examId, userDepartment, getAssignmentsByDepartment])
+    fetchExam()
+  }, [examId])
+
+  // Fetch assignments from backend
+  const fetchAssignments = async () => {
+    setIsLoading(true); // Start loading
+    if (!examId || !departmentId) {
+      setIsLoading(false);
+      return;
+    }
+    const res = await fetch(`/api/assignments?exam_id=${examId}&department_id=${departmentId}`);
+    if (res.ok) {
+      const data = await res.json();
+      console.log("Fetched assignments:", data);
+      setSelectedEmployees(data);
+    } else {
+      setSelectedEmployees([]);
+    }
+    setIsLoading(false); // Stop loading
+  }
+
+  // Load assignments when examId or department changes
+  useEffect(() => {
+    fetchAssignments()
+  }, [examId, departmentId])
 
   // Update current time every minute
   useEffect(() => {
@@ -63,6 +84,8 @@ export default function ManageStaff() {
 
     return () => clearInterval(timer)
   }, [])
+
+  const examDates = exam ? getExamDates(exam.start_date, exam.end_date) : []
 
   // Set first date as selected by default
   useEffect(() => {
@@ -77,61 +100,52 @@ export default function ManageStaff() {
     setHasChanges(hasChanges)
   }, [selectedEmployees, originalEmployees])
 
-  const handleAddEmployee = () => {
+  const handleAddEmployee = async () => {
     if (!selectedEmployee || !selectedDate || !examId) return
-
-    // Find the employee in the department
     const employee = departmentEmployees.find((emp) => emp.id === selectedEmployee)
-
     if (!employee) return
-
-    // Check if employee is already assigned for this date and session
     const isAlreadyAssigned = selectedEmployees.some(
-      (emp) => emp.id === selectedEmployee && emp.date === selectedDate && emp.session === selectedSession,
+      (emp) => emp.employee_id === selectedEmployee && emp.date === selectedDate && emp.session === selectedSession,
     )
-
     if (isAlreadyAssigned) {
       alert("This employee is already assigned for this date and session.")
       return
     }
-
-    // Check if changes are allowed (2 hours before exam)
     if (!isEmployeeChangeAllowed(selectedDate, selectedSession)) {
       alert("Changes cannot be made within 2 hours of the examination time.")
       return
     }
-
-    // Create a unique ID for this assignment
-    const assignmentId = `${selectedEmployee}-${selectedDate}-${selectedSession}`
-
-    const newEmployee = {
-      ...employee,
-      id: assignmentId,
-      department: userDepartment,
-      date: selectedDate,
-      session: selectedSession,
+    // POST to backend
+    const res = await fetch('/api/assignments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        exam_id: examId,
+        department_id: departmentId,
+        employee_id: selectedEmployee,
+        date: selectedDate,
+        session: selectedSession,
+      }),
+    })
+    const data = await res.json();
+    console.log("Add employee response:", res.status, data);
+    if (!res.ok) {
+      alert(data.error || "Failed to add employee");
+      return;
     }
-
-    setSelectedEmployees([...selectedEmployees, newEmployee])
+    await fetchAssignments()
     setSelectedEmployee("")
   }
 
-  const handleRemoveEmployee = (id, date, session) => {
+  const handleRemoveEmployee = async (id) => {
     if (!examId) return
-    // Check if changes are allowed (2 hours before exam)
-    if (!isEmployeeChangeAllowed(date, session)) {
-      alert("Changes cannot be made within 2 hours of the examination time.")
-      return
-    }
-
-    // Remove from local state
-    setSelectedEmployees(
-      selectedEmployees.filter((emp) => !(emp.id === id && emp.date === date && emp.session === session)),
-    )
-
-    // Also remove from the store
-    const assignmentId = `${id}-${date}-${session}`
-    removeAssignment(examId, userDepartment, assignmentId)
+    // DELETE from backend
+    await fetch('/api/assignments', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ assignment_id: id }),
+    })
+    await fetchAssignments()
   }
 
   const handleSaveList = () => {
@@ -146,7 +160,7 @@ export default function ManageStaff() {
     }
 
     // Get current assignments to prevent duplicates
-    const existingAssignments = getAssignmentsByDepartment(examId, userDepartment)
+    const existingAssignments = selectedEmployees
     
     // Create a map of existing assignments for quick lookup
     const existingAssignmentsMap = new Map(
@@ -164,7 +178,18 @@ export default function ManageStaff() {
 
     // Only add new assignments
     newAssignments.forEach(employee => {
-      addAssignment(examId, userDepartment, employee)
+      // POST to backend
+      fetch('/api/assignments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          exam_id: examId,
+          department_id: departmentId,
+          employee_id: employee.employee_id,
+          date: employee.date,
+          session: employee.session,
+        }),
+      })
     })
 
     // Update original state after saving
@@ -188,8 +213,16 @@ export default function ManageStaff() {
 
   // Get employees for selected date and session
   const getEmployeesForDateAndSession = (date, session) => {
+    // Ensure date is always compared as 'YYYY-MM-DD' string
+    const dateStr = typeof date === 'string' ? date : date.toLocaleDateString('en-CA');
     return selectedEmployees.filter(
-      (emp) => emp.date === date && emp.session === session
+      (emp) => emp.date === dateStr && emp.session === session
+    );
+  }
+
+  if (loadingExam) {
+    return (
+      <div className="container mx-auto p-8 text-center text-gray-600">Loading exam details...</div>
     )
   }
 
@@ -242,7 +275,7 @@ export default function ManageStaff() {
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">
         <h2 className="text-xl font-bold mb-4">{exam.title}</h2>
         <p className="text-gray-600 mb-4">
-          {new Date(exam.startDate).toLocaleDateString()} - {new Date(exam.endDate).toLocaleDateString()}
+          {new Date(exam.start_date).toLocaleDateString()} - {new Date(exam.end_date).toLocaleDateString()}
         </p>
 
         {/* Date Tabs */}
@@ -355,10 +388,10 @@ export default function ManageStaff() {
                 >
                   <div>
                     <span className="font-medium">{emp.name}</span>
-                    <span className="text-gray-600 ml-2">({emp.designation})</span>
+                    <span className="text-gray-600 ml-2">{emp.designation ? `(${emp.designation})` : null}</span>
                   </div>
                   <button
-                    onClick={() => handleRemoveEmployee(emp.id, emp.date, emp.session)}
+                    onClick={() => handleRemoveEmployee(emp.id)}
                     className="text-red-500 hover:text-red-700"
                   >
                     <Trash2 size={18} />
@@ -379,10 +412,10 @@ export default function ManageStaff() {
                 >
                   <div>
                     <span className="font-medium">{emp.name}</span>
-                    <span className="text-gray-600 ml-2">({emp.designation})</span>
+                    <span className="text-gray-600 ml-2">{emp.designation ? `(${emp.designation})` : null}</span>
                   </div>
                   <button
-                    onClick={() => handleRemoveEmployee(emp.id, emp.date, emp.session)}
+                    onClick={() => handleRemoveEmployee(emp.id)}
                     className="text-red-500 hover:text-red-700"
                   >
                     <Trash2 size={18} />
@@ -418,7 +451,7 @@ function getExamDates(startDate, endDate) {
   const lastDate = new Date(endDate)
 
   while (currentDate <= lastDate) {
-    dates.push(new Date(currentDate).toISOString().split('T')[0])
+    dates.push(currentDate.toLocaleDateString('en-CA'))
     currentDate.setDate(currentDate.getDate() + 1)
   }
 

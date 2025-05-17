@@ -2,13 +2,26 @@
 import { useRouter } from "next/navigation"
 import DashboardHeader from "@/components/dashboard/dashboard-header"
 import { Plus, Trash2 } from "lucide-react"
-import { useExamStore, useAuthStore } from "@/lib/data"
+import { useAuthStore } from "@/lib/data"
 import AuthGuard from "@/components/auth/auth-guard"
+import { useEffect, useState } from "react"
 
 export default function ExamSectionDashboard() {
   const router = useRouter()
-  const { examinations, deleteExamination } = useExamStore()
   const { user } = useAuthStore()
+  const [examinations, setExaminations] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function fetchExams() {
+      setLoading(true)
+      const res = await fetch("/api/examinations")
+      const data = await res.json()
+      setExaminations(data)
+      setLoading(false)
+    }
+    fetchExams()
+  }, [])
 
   const handleCreateExam = () => {
     router.push("/exam-section/create-exam")
@@ -18,9 +31,14 @@ export default function ExamSectionDashboard() {
     router.push(`/exam-section/manage/${examId}`)
   }
 
-  const handleDeleteExam = (examId) => {
+  const handleDeleteExam = async (examId) => {
     if (window.confirm("Are you sure you want to delete this examination series? This action cannot be undone.")) {
-      deleteExamination(examId)
+      const res = await fetch(`/api/examinations/${examId}`, { method: "DELETE" })
+      if (res.ok) {
+        setExaminations(examinations.filter(e => e.id !== examId))
+      } else {
+        alert("Failed to delete examination.")
+      }
     }
   }
 
@@ -40,7 +58,9 @@ export default function ExamSectionDashboard() {
           </button>
         </div>
 
-        {examinations.length > 0 ? (
+        {loading ? (
+          <div className="text-center py-8">Loading examinations...</div>
+        ) : examinations.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {examinations.map((exam) => (
               <div key={exam.id} className="bg-white rounded-lg shadow-md overflow-hidden">
@@ -59,7 +79,7 @@ export default function ExamSectionDashboard() {
                   <div className="mb-4">
                     <div className="flex items-center mb-2">
                       <span className="text-gray-700">
-                        {new Date(exam.startDate).toLocaleDateString()} - {new Date(exam.endDate).toLocaleDateString()}
+                        {new Date(exam.start_date).toLocaleDateString()} - {new Date(exam.end_date).toLocaleDateString()}
                       </span>
                     </div>
 

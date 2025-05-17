@@ -1,21 +1,32 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import DashboardHeader from "@/components/dashboard/dashboard-header"
 import { ArrowLeft } from "lucide-react"
-import { useExamStore, useAuthStore, useRequirementsStore } from "@/lib/data"
+import { useAuthStore } from "@/lib/data"
 import AuthGuard from "@/components/auth/auth-guard"
 import ViewRequirementsModal from "@/components/coordinator/view-requirements-modal"
 
 export default function ViewRequirements() {
   const router = useRouter()
-  const { examinations } = useExamStore()
   const { user } = useAuthStore()
-  const { requirements } = useRequirementsStore()
 
+  const [examinations, setExaminations] = useState([])
+  const [loading, setLoading] = useState(true)
   const [selectedExam, setSelectedExam] = useState(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
+
+  useEffect(() => {
+    async function fetchExams() {
+      setLoading(true)
+      const res = await fetch("/api/examinations")
+      const data = await res.json()
+      setExaminations(data)
+      setLoading(false)
+    }
+    fetchExams()
+  }, [])
 
   const handleExamSelect = (exam) => {
     setSelectedExam(exam)
@@ -42,7 +53,9 @@ export default function ViewRequirements() {
             <h2 className="text-xl font-bold">Current Examination Series</h2>
           </div>
 
-          {examinations.length > 0 ? (
+          {loading ? (
+            <div className="text-center py-8">Loading examinations...</div>
+          ) : examinations.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {examinations.map((exam) => (
                 <div

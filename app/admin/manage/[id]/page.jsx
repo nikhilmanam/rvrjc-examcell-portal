@@ -1,22 +1,46 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { ArrowLeft, Users, Calendar, Building2 } from "lucide-react"
 import DashboardHeader from "@/components/dashboard/dashboard-header"
 import DepartmentAssignments from "@/components/admin/department-assignments"
 import RoomAllocation from "@/components/admin/room-allocation"
-import { useAuthStore, useExamStore } from "@/lib/data"
+import { useAuthStore } from "@/lib/data"
 import AuthGuard from "@/components/auth/auth-guard"
 
 export default function ManageExam({ params }) {
   const router = useRouter()
   const { user } = useAuthStore()
-  const { examinations } = useExamStore()
   const [activeTab, setActiveTab] = useState("assignments")
 
   const examId = params.id
-  const exam = examinations.find((e) => e.id === examId)
+  const [exam, setExam] = useState(null)
+  const [loadingExam, setLoadingExam] = useState(true)
+
+  useEffect(() => {
+    async function fetchExam() {
+      setLoadingExam(true)
+      const res = await fetch(`/api/examinations/${examId}`)
+      if (res.ok) {
+        setExam(await res.json())
+      } else {
+        setExam(null)
+      }
+      setLoadingExam(false)
+    }
+    if (examId) fetchExam()
+  }, [examId])
+
+  if (loadingExam) {
+    return (
+      <AuthGuard allowedRole="admin">
+        <div className="container mx-auto p-6 text-center text-gray-600">
+          Loading exam details...
+        </div>
+      </AuthGuard>
+    )
+  }
 
   if (!exam) {
     return (
@@ -55,7 +79,7 @@ export default function ManageExam({ params }) {
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-bold">Exam Details</h2>
             <div className="text-gray-600">
-              {new Date(exam.startDate).toLocaleDateString()} - {new Date(exam.endDate).toLocaleDateString()}
+              {new Date(exam.start_date).toLocaleDateString()} - {new Date(exam.end_date).toLocaleDateString()}
             </div>
           </div>
 
@@ -86,13 +110,8 @@ export default function ManageExam({ params }) {
           </div>
 
           {/* Tab Content */}
-          <div className="mt-6">
-            {activeTab === "assignments" ? (
-              <DepartmentAssignments examId={examId} />
-            ) : (
-              <RoomAllocation examId={examId} />
-            )}
-          </div>
+          {activeTab === "assignments" && <DepartmentAssignments examId={examId} />}
+          {activeTab === "rooms" && <RoomAllocation examId={examId} />}
         </div>
       </div>
     </AuthGuard>

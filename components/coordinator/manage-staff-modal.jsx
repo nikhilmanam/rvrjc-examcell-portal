@@ -103,34 +103,6 @@ export default function ManageStaffModal({ onClose, department, examId }) {
     onClose()
   }
 
-  const handleAddNewEmployee = async (newEmp) => {
-    // newEmp: { name, qualification, designation }
-    // You need to map department name to department_id and set a default role_id (e.g., 1 for 'employee')
-    const departmentMap = {
-      CSE: 1, CSBS: 2, "CSE(DS)": 3, "CSE(AILML)": 4, "CSE(IOT)": 5, IT: 6, ECE: 7, EEE: 8, CHE: 9, CIVIL: 10, MECH: 11, MCA: 12, MBA: 13
-    }
-    const department_id = departmentMap[department] || 1
-    const role_id = 1 // Assuming 1 is the default role for 'employee'
-    const res = await fetch('/api/employees', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: newEmp.name,
-        qualification: newEmp.qualification,
-        designation: newEmp.designation,
-        department_id,
-        role_id
-      })
-    })
-    if (res.ok) {
-      alert('Employee added!')
-      // Optionally, refresh the employee list
-      // You can call setDepartmentEmployees or trigger a re-fetch
-    } else {
-      alert('Failed to add employee')
-    }
-  }
-
   const filteredEmployees = departmentEmployees.filter((emp) => {
     if (!searchQuery) return true
 

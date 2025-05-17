@@ -1,16 +1,40 @@
 "use client"
 import { useRouter } from "next/navigation"
 import DashboardHeader from "@/components/dashboard/dashboard-header"
-import { useExamStore, useAuthStore } from "@/lib/data"
+import { useAuthStore } from "@/lib/data"
 import AuthGuard from "@/components/auth/auth-guard"
+import { useEffect, useState } from "react"
 
 export default function AdminDashboard() {
   const router = useRouter()
-  const { examinations } = useExamStore()
   const { user } = useAuthStore()
+  const [examinations, setExaminations] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function fetchExams() {
+      setLoading(true)
+      const res = await fetch("/api/examinations")
+      const data = await res.json()
+      setExaminations(data)
+      setLoading(false)
+    }
+    fetchExams()
+  }, [])
 
   const handleManageExam = (examId) => {
     router.push(`/admin/manage/${examId}`)
+  }
+
+  const handleDeleteExam = async (examId) => {
+    if (window.confirm("Are you sure you want to delete this examination series? This action cannot be undone.")) {
+      const res = await fetch(`/api/examinations/${examId}`, { method: "DELETE" })
+      if (res.ok) {
+        setExaminations(examinations.filter(e => e.id !== examId))
+      } else {
+        alert("Failed to delete examination.")
+      }
+    }
   }
 
   return (
@@ -22,19 +46,30 @@ export default function AdminDashboard() {
           <h2 className="text-xl font-bold">Examination Series</h2>
         </div>
 
-        {examinations.length > 0 ? (
+        {loading ? (
+          <div className="text-center py-8">Loading examinations...</div>
+        ) : examinations.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {examinations.map((exam) => (
               <div key={exam.id} className="bg-white rounded-lg shadow-md overflow-hidden">
-                <div className={`p-4 ${exam.status === "complete" ? "bg-green-500" : "bg-blue-500"} text-white`}>
+                <div className={`p-4 ${exam.status === "complete" ? "bg-green-500" : "bg-blue-500"} text-white relative`}>
                   <h3 className="font-bold text-lg truncate">{exam.title}</h3>
+                  <button
+                    onClick={() => handleDeleteExam(exam.id)}
+                    className="absolute top-4 right-4 text-white hover:text-red-200 transition-colors"
+                    title="Delete examination"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
                 </div>
 
                 <div className="p-4">
                   <div className="mb-4">
                     <div className="flex items-center mb-2">
                       <span className="text-gray-700">
-                        {new Date(exam.startDate).toLocaleDateString()} - {new Date(exam.endDate).toLocaleDateString()}
+                        {new Date(exam.start_date).toLocaleDateString()} - {new Date(exam.end_date).toLocaleDateString()}
                       </span>
                     </div>
 

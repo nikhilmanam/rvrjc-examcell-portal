@@ -4,11 +4,9 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import DashboardHeader from "@/components/dashboard/dashboard-header"
 import { ArrowLeft } from "lucide-react"
-import { useExamStore } from "@/lib/data"
 
 export default function CreateExam() {
   const router = useRouter()
-  const { addExamination } = useExamStore()
 
   const [formData, setFormData] = useState({
     title: "",
@@ -30,14 +28,28 @@ export default function CreateExam() {
     }))
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
-
-    // Add the examination to the store
-    addExamination(formData)
-
-    // Navigate back to dashboard
+    // Prepare data for backend
+    const payload = {
+      title: formData.title,
+      start_date: formData.startDate,
+      end_date: formData.endDate,
+      morning_start_time: formData.morningSession ? formData.morningStartTime : null,
+      morning_end_time: formData.morningSession ? formData.morningEndTime : null,
+      afternoon_start_time: formData.afternoonSession ? formData.afternoonStartTime : null,
+      afternoon_end_time: formData.afternoonSession ? formData.afternoonEndTime : null,
+    }
+    const res = await fetch("/api/examinations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    })
+    if (res.ok) {
     router.push("/exam-section/dashboard")
+    } else {
+      alert("Failed to create examination series.")
+    }
   }
 
   return (

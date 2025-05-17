@@ -2,42 +2,83 @@
 
 import React, { useState, useEffect } from "react"
 import { Download, Save, ArrowLeft } from "lucide-react"
-import { departments } from "@/lib/data"
 import { useRouter } from "next/navigation"
 
 export default function InvigilatorRequirementsTable({ examId, dateRange }) {
   const router = useRouter()
+  const [departments, setDepartments] = useState([])
+  const [localRequirements, setLocalRequirements] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  // Fetch departments from backend
+  useEffect(() => {
+    async function fetchDepartments() {
+      const res = await fetch('/api/departments')
+      const data = await res.json()
+      setDepartments(data)
+    }
+    fetchDepartments()
+  }, [])
 
   // Initialize requirements state with zeros
-  const [localRequirements, setLocalRequirements] = useState(
+  useEffect(() => {
+    if (departments.length > 0) {
+      setLocalRequirements(
     dateRange.map((date) => ({
-      date: new Date(date),
+          date: new Date(date),
       departments: departments.map((dept) => ({
-        name: dept,
+            id: dept.id,
+            name: dept.name,
         morning: 0,
         afternoon: 0,
       })),
-    }))
+        }))
   )
-  const [loading, setLoading] = useState(true)
+    }
+  }, [dateRange, departments])
 
-  // Load existing requirements from backend
+  // Fetch requirements from backend
   useEffect(() => {
-    if (!examId) return
-    setLoading(true)
-    fetch(`/api/requirements?examId=${examId}`)
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data) && data.length > 0) {
-          setLocalRequirements(data.map(req => ({
-            ...req,
-            date: new Date(req.date)
-          })))
-        }
-        setLoading(false)
-      })
-      .catch(() => setLoading(false))
-  }, [examId])
+    async function fetchRequirements() {
+      if (departments.length === 0) return
+      setLoading(true)
+      const res = await fetch(`/api/requirements?exam_id=${examId}`)
+      const data = await res.json()
+      if (Array.isArray(data)) {
+        // Map backend data to localRequirements structure
+        const reqMap = {}
+        data.forEach((row) => {
+          // Use the date string as-is from the backend (assume YYYY-MM-DD)
+          const dateStr = row.date
+          if (!reqMap[dateStr]) reqMap[dateStr] = {}
+          reqMap[dateStr][row.department_id] = {
+            morning: row.morning,
+            afternoon: row.afternoon,
+          }
+        })
+        setLocalRequirements(
+          dateRange.map((date) => {
+            // Use local date string for matching
+            const dateStr = date.toLocaleDateString('en-CA')
+            return {
+              date: new Date(date),
+              departments: departments.map((dept) => {
+                const req = reqMap[dateStr]?.[dept.id] || { morning: 0, afternoon: 0 }
+                return {
+                  id: dept.id,
+                  name: dept.name,
+                  morning: req.morning,
+                  afternoon: req.afternoon,
+                }
+              }),
+            }
+          })
+        )
+    }
+      setLoading(false)
+    }
+    fetchRequirements()
+  }, [examId, dateRange, departments])
 
   const handleRequirementChange = (dateIndex, deptIndex, session, value) => {
     const newValue = Number.parseInt(value) || 0
@@ -51,17 +92,52 @@ export default function InvigilatorRequirementsTable({ examId, dateRange }) {
   }
 
   const handleSave = async () => {
-    // Save requirements to the backend
-    await fetch("/api/requirements", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ examId, requirements: localRequirements })
-    })
+    // Save all requirements to backend
+    for (let dateIndex = 0; dateIndex < localRequirements.length; dateIndex++) {
+      const day = localRequirements[dateIndex]
+      const dateStr = day.date.toLocaleDateString('en-CA')
+      for (let deptIndex = 0; deptIndex < day.departments.length; deptIndex++) {
+        const dept = day.departments[deptIndex]
+        await fetch("/api/requirements", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            exam_id: examId,
+            department_id: dept.id,
+            date: dateStr,
+            morning: dept.morning,
+            afternoon: dept.afternoon,
+          }),
+        })
+      }
+    }
     alert("Requirements saved successfully!")
   }
 
   const handleDownload = () => {
-    alert("Requirements downloaded as CSV")
+    // Generate CSV content
+    const headers = ["Date", ...departments.flatMap(dept => [`${dept.name} (M)`, `${dept.name} (A)`])]
+    const rows = localRequirements.map(day => {
+      const date = formatDate(day.date)
+      const values = day.departments.flatMap(dept => [dept.morning, dept.afternoon])
+      return [date, ...values]
+    })
+    
+    // Create CSV content
+    const csvContent = [
+      headers.join(","),
+      ...rows.map(row => row.join(","))
+    ].join("\n")
+    
+    // Create and download file
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+    const link = document.createElement("a")
+    const url = URL.createObjectURL(blob)
+    link.setAttribute("href", url)
+    link.setAttribute("download", `requirements_${examId}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
   }
 
   const formatDate = (date) => {
@@ -75,7 +151,9 @@ export default function InvigilatorRequirementsTable({ examId, dateRange }) {
     })
   }
 
-  if (loading) return <div>Loading requirements...</div>
+  if (loading || departments.length === 0) {
+    return <div className="text-center py-8">Loading requirements...</div>
+  }
 
   return (
     <div>
@@ -108,24 +186,15 @@ export default function InvigilatorRequirementsTable({ examId, dateRange }) {
           </button>
         </div>
       </div>
-
       <div className="overflow-x-auto">
-        <table className="min-w-full border">
+        <table className="min-w-full bg-white border">
           <thead>
             <tr className="bg-gray-100">
-              <th className="py-3 px-4 border text-left">Date</th>
+              <th className="py-2 px-4 border text-left">Date</th>
               {departments.map((dept) => (
-                <th key={dept} className="py-3 px-4 border text-center" colSpan={2}>
-                  {dept}
-                </th>
-              ))}
-            </tr>
-            <tr className="bg-gray-50">
-              <th className="py-2 px-4 border"></th>
-              {departments.map((dept) => (
-                <React.Fragment key={`${dept}-sessions`}>
-                  <th className="py-2 px-2 border text-center w-12">M</th>
-                  <th className="py-2 px-2 border text-center w-12">A</th>
+                <React.Fragment key={dept.id}>
+                  <th className="py-2 px-2 border text-center">{dept.name} (M)</th>
+                  <th className="py-2 px-2 border text-center">{dept.name} (A)</th>
                 </React.Fragment>
               ))}
             </tr>
@@ -161,7 +230,6 @@ export default function InvigilatorRequirementsTable({ examId, dateRange }) {
           </tbody>
         </table>
       </div>
-
       <div className="mt-4 text-sm text-gray-500">
         <p>M = Morning Session, A = Afternoon Session</p>
         <p>Enter the number of invigilators required for each department and session.</p>

@@ -2,21 +2,19 @@
 
 import { useState, useEffect } from "react"
 import { Download, Plus, Save, ArrowLeft, Calendar } from "lucide-react"
-import { useRoomStore, useExamStore } from "@/lib/data"
 import { useRouter } from "next/navigation"
 
 export default function RoomManagement({ examId }) {
   const router = useRouter()
   const blocks = ["CB", "DG", "MN", "HT", "SJB"]
-  const { rooms, addRoom, deleteRoom } = useRoomStore()
-  const { examinations } = useExamStore()
 
+  const [rooms, setRooms] = useState([])
+  const [loadingRooms, setLoadingRooms] = useState(true)
   const [selectedDate, setSelectedDate] = useState(null)
   const [dateRange, setDateRange] = useState([])
   const [selectedSession, setSelectedSession] = useState("AM")
 
   const [newRoom, setNewRoom] = useState({
-    examId: examId,
     block: "CB",
     roomNumber: "",
     type: "Normal",
@@ -24,34 +22,45 @@ export default function RoomManagement({ examId }) {
     session: "AM",
   })
 
+  // Fetch rooms from backend
+  const fetchRooms = async () => {
+    try {
+      setLoadingRooms(true)
+      const res = await fetch(`/api/rooms?exam_id=${examId}`)
+      if (!res.ok) throw new Error('Failed to fetch rooms')
+      const data = await res.json()
+      setRooms(Array.isArray(data) ? data : [])
+    } catch (error) {
+      console.error('Error fetching rooms:', error)
+      setRooms([])
+    } finally {
+      setLoadingRooms(false)
+    }
+  }
+
   useEffect(() => {
-    // Find the examination by ID
-    const foundExam = examinations.find((e) => e.id === examId)
+    if (examId) fetchRooms()
+  }, [examId])
 
-    if (foundExam && foundExam.startDate && foundExam.endDate) {
-      // Generate date range between start and end dates
-      const start = new Date(foundExam.startDate)
-      const end = new Date(foundExam.endDate)
-      const dates = []
-
-      const currentDate = new Date(start)
-      while (currentDate <= end) {
-        dates.push(new Date(currentDate))
-        currentDate.setDate(currentDate.getDate() + 1)
-      }
-
-      setDateRange(dates)
-
-      // Set default selected date to the first date
-      if (dates.length > 0 && !selectedDate) {
-        setSelectedDate(dates[0])
-        setNewRoom((prev) => ({
-          ...prev,
-          date: dates[0].toISOString(),
-        }))
+  // Fetch date range from exam (fetch exam details here)
+  useEffect(() => {
+    async function fetchExamDetails() {
+      if (!examId) return;
+      const res = await fetch(`/api/examinations/${examId}`);
+      if (!res.ok) return;
+      const exam = await res.json();
+      if (exam.start_date && exam.end_date) {
+        const start = new Date(exam.start_date);
+        const end = new Date(exam.end_date);
+        const range = [];
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+          range.push(new Date(d));
+        }
+        setDateRange(range.map(d => new Date(d)));
       }
     }
-  }, [examId, examinations, selectedDate])
+    fetchExamDetails();
+  }, [examId]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target
@@ -74,48 +83,88 @@ export default function RoomManagement({ examId }) {
     }))
   }
 
-  const handleAddRoom = () => {
+  const handleAddRoom = async () => {
     if (!newRoom.roomNumber || !selectedDate) return
-
-    addRoom({
-      ...newRoom,
-      date: selectedDate.toISOString(),
+    const payload = {
+      exam_id: Number(examId),
+      block: newRoom.block,
+      room_number: newRoom.roomNumber,
+      type: newRoom.type,
+      date: selectedDate.toISOString().split("T")[0],
       session: selectedSession,
+    }
+    const res = await fetch("/api/rooms", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
     })
-
-    // Reset form (but keep date and session)
-    setNewRoom({
-      examId: examId,
-      block: "CB",
-      roomNumber: "",
-      type: "Normal",
-      date: selectedDate.toISOString(),
-      session: selectedSession,
-    })
+    if (res.ok) {
+      await fetchRooms()
+      setNewRoom({
+        block: "CB",
+        roomNumber: "",
+        type: "Normal",
+        date: selectedDate.toISOString(),
+        session: selectedSession,
+      })
+    } else {
+      const error = await res.json()
+      alert("Failed to add room: " + (error.error || "Unknown error"))
+      await fetchRooms()
+    }
   }
 
-  const handleDeleteRoom = (id) => {
-    deleteRoom(id)
+  const handleDeleteRoom = async (id) => {
+    const res = await fetch(`/api/rooms/${id}`, { method: "DELETE" })
+    if (res.ok) {
+      await fetchRooms()
+    } else {
+      alert("Failed to delete room.")
+    }
   }
 
   const handleSave = () => {
-    // In a real app, this would save to a database
+    // All changes are already saved to backend
     alert("Rooms saved successfully!")
   }
 
   const handleDownload = () => {
-    // In a real app, this would generate and download a CSV file
-    alert("Room list downloaded as CSV")
+    // Generate CSV content
+    const headers = ["Block", "Room Number", "Type", "Date", "Session"]
+    const rows = rooms.map(room => [room.block, room.room_number, room.type, room.date, room.session])
+    const csvContent = [
+      headers.join(","),
+      ...rows.map(row => row.join(","))
+    ].join("\n")
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+    const link = document.createElement("a")
+    const url = URL.createObjectURL(blob)
+    link.setAttribute("href", url)
+    link.setAttribute("download", `rooms_${examId}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
   }
+
+  // Debug logging
+  console.log("All rooms:", rooms)
+  console.log("Selected date:", selectedDate, "Session:", selectedSession, "ExamId:", examId)
 
   // Filter rooms for this exam, date and session
   const filteredRooms = rooms.filter(
     (room) =>
-      room.examId === examId &&
+      String(room.exam_id) === String(examId) &&
       selectedDate &&
       new Date(room.date).toDateString() === selectedDate.toDateString() &&
       room.session === selectedSession,
   )
+
+  // For debugging: if filteredRooms is empty, show all rooms
+  const showAllRooms = filteredRooms.length === 0
+
+  if (loadingRooms) {
+    return <div className="text-center py-8">Loading rooms...</div>
+  }
 
   return (
     <div>
@@ -252,29 +301,50 @@ export default function RoomManagement({ examId }) {
               <th className="py-3 px-4 border text-left">Block</th>
               <th className="py-3 px-4 border text-left">Room Number</th>
               <th className="py-3 px-4 border text-left">Type</th>
+              <th className="py-3 px-4 border text-left">Date</th>
+              <th className="py-3 px-4 border text-left">Session</th>
               <th className="py-3 px-4 border text-left">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {filteredRooms.length > 0 ? (
-              filteredRooms.map((room) => (
-                <tr key={room.id}>
-                  <td className="py-2 px-4 border">{room.block}</td>
-                  <td className="py-2 px-4 border">{room.roomNumber}</td>
-                  <td className="py-2 px-4 border">{room.type}</td>
-                  <td className="py-2 px-4 border">
-                    <button
-                      onClick={() => handleDeleteRoom(room.id)}
-                      className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded"
-                    >
-                      Delete
-                    </button>
-                  </td>
-                </tr>
-              ))
-            ) : (
+            {showAllRooms
+              ? rooms.map((room) => (
+                  <tr key={room.id}>
+                    <td className="py-2 px-4 border">{room.block}</td>
+                    <td className="py-2 px-4 border">{room.room_number}</td>
+                    <td className="py-2 px-4 border">{room.type}</td>
+                    <td className="py-2 px-4 border">{room.date}</td>
+                    <td className="py-2 px-4 border">{room.session}</td>
+                    <td className="py-2 px-4 border">
+                      <button
+                        onClick={() => handleDeleteRoom(room.id)}
+                        className="text-red-500 hover:text-red-700"
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              : filteredRooms.map((room) => (
+                  <tr key={room.id}>
+                    <td className="py-2 px-4 border">{room.block}</td>
+                    <td className="py-2 px-4 border">{room.room_number}</td>
+                    <td className="py-2 px-4 border">{room.type}</td>
+                    <td className="py-2 px-4 border">{room.date}</td>
+                    <td className="py-2 px-4 border">{room.session}</td>
+                    <td className="py-2 px-4 border">
+                      <button
+                        onClick={() => handleDeleteRoom(room.id)}
+                        className="text-red-500 hover:text-red-700"
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+            {rooms.length === 0 && (
               <tr>
-                <td colSpan="4" className="py-4 text-center text-gray-500">
+                <td colSpan="6" className="py-4 text-center text-gray-500">
                   No rooms added for this date and session yet.
                 </td>
               </tr>
